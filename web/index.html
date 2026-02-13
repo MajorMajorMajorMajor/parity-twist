@@ -514,9 +514,15 @@ h1 {
     <button class="btn menu-btn menu-btn-ai" id="menuAIBtn" onclick="showDifficulty()">VS AI</button>
     <div class="difficulty-panel" id="difficultyPanel" style="display:none;">
       <div class="diff-label">SELECT DIFFICULTY</div>
-      <button class="btn diff-btn" onclick="startGame(true,'easy')">EASY</button>
-      <button class="btn diff-btn" onclick="startGame(true,'medium')">MEDIUM</button>
-      <button class="btn diff-btn" onclick="startGame(true,'hard')">HARD</button>
+      <button class="btn diff-btn" onclick="selectDifficulty('easy')">EASY</button>
+      <button class="btn diff-btn" onclick="selectDifficulty('medium')">MEDIUM</button>
+      <button class="btn diff-btn" onclick="selectDifficulty('hard')">HARD</button>
+    </div>
+    <div class="difficulty-panel" id="turnOrderPanel" style="display:none;">
+      <div class="diff-label">WHO GOES FIRST?</div>
+      <button class="btn diff-btn" onclick="startGame(true,'human')">YOU</button>
+      <button class="btn diff-btn" onclick="startGame(true,'ai')">AI</button>
+      <button class="btn diff-btn" onclick="startGame(true,'random')">RANDOM</button>
     </div>
   </div>
 </div>
@@ -609,6 +615,7 @@ let numberPlacements = {}; // number -> {cell, player}
 // AI state
 let vsAI = false;
 let aiDifficulty = 'medium';
+let aiPlayer = 2; // which player number the AI controls (1 or 2)
 let aiThinking = false;
 
 // All cell IDs
@@ -722,7 +729,7 @@ function doPlaceNumber(cellId, n) {
     updateTurnBar();
 
     // Trigger AI move if applicable
-    if (vsAI && currentPlayer === 2 && !gameOver) {
+    if (vsAI && currentPlayer === aiPlayer && !gameOver) {
       triggerAIMove();
     }
   }
@@ -750,7 +757,7 @@ function updateTurnBar() {
     text.textContent = 'AI is thinking...';
     bar.classList.add('ai-thinking');
   } else if (vsAI) {
-    text.textContent = currentPlayer === 1 ? "Your Turn" : "AI's Turn";
+    text.textContent = currentPlayer === aiPlayer ? "AI's Turn" : "Your Turn";
     bar.classList.remove('ai-thinking');
   } else {
     text.textContent = `Player ${currentPlayer}'s Turn`;
@@ -823,7 +830,7 @@ function resolveGame() {
 
     // Row indicator
     const ind = document.getElementById(`rowInd${r}`);
-    ind.textContent = winner === 1 ? (vsAI ? 'YOU' : 'P1') : (vsAI ? 'AI' : 'P2');
+    ind.textContent = vsAI ? (winner === aiPlayer ? 'AI' : 'YOU') : `P${winner}`;
     ind.className = `row-ind-item show ${winner === 1 ? 'p1w' : 'p2w'}`;
   }
 
@@ -839,13 +846,13 @@ function showResult(p1Wins, p2Wins, rowResults) {
 
   let winnerLabel;
   if (vsAI) {
-    winnerLabel = overallWinner === 1 ? 'You Win!' : 'AI Wins!';
+    winnerLabel = overallWinner === aiPlayer ? 'AI Wins!' : 'You Win!';
   } else {
     winnerLabel = `Player ${overallWinner} Wins!`;
   }
 
-  const p1Label = vsAI ? 'You' : 'P1';
-  const p2Label = vsAI ? 'AI' : 'P2';
+  const p1Label = vsAI ? (aiPlayer === 1 ? 'AI' : 'You') : 'P1';
+  const p2Label = vsAI ? (aiPlayer === 2 ? 'AI' : 'You') : 'P2';
 
   let html = `<h2 style="color:${winColor}">${winnerLabel}</h2>`;
   html += `<div class="winner-text" style="font-size:0.85rem;color:var(--text-dim);margin-bottom:14px;">Score: ${p1Label} ${p1Wins} &ndash; ${p2Label} ${p2Wins}</div>`;
@@ -883,9 +890,12 @@ function hideHelp() {
 
 // ── Menu ──
 
+let selectedDiff = 'medium';
+
 function showMenu() {
   hideResult();
   document.getElementById('difficultyPanel').style.display = 'none';
+  document.getElementById('turnOrderPanel').style.display = 'none';
   document.getElementById('menuAIBtn').style.display = '';
   document.getElementById('menuOverlay').classList.add('show');
 }
@@ -895,9 +905,20 @@ function showDifficulty() {
   document.getElementById('menuAIBtn').style.display = 'none';
 }
 
-function startGame(ai, difficulty) {
+function selectDifficulty(diff) {
+  selectedDiff = diff;
+  document.getElementById('difficultyPanel').style.display = 'none';
+  document.getElementById('turnOrderPanel').style.display = 'flex';
+}
+
+function startGame(ai, turnOrder) {
   vsAI = ai;
-  aiDifficulty = difficulty || 'medium';
+  if (vsAI) {
+    aiDifficulty = selectedDiff;
+    if (turnOrder === 'ai') aiPlayer = 1;
+    else if (turnOrder === 'random') aiPlayer = Math.random() < 0.5 ? 1 : 2;
+    else aiPlayer = 2;
+  }
   document.getElementById('menuOverlay').classList.remove('show');
   document.getElementById('subtitleText').textContent = vsAI
     ? `VS AI (${aiDifficulty.toUpperCase()})`
@@ -940,8 +961,23 @@ function newGame() {
     ind.textContent = '';
   }
 
+  // Update column headers for AI mode
+  const headers = document.querySelectorAll('.col-headers span');
+  if (vsAI) {
+    headers[0].textContent = aiPlayer === 1 ? 'AI' : 'YOU';
+    headers[1].textContent = aiPlayer === 2 ? 'AI' : 'YOU';
+  } else {
+    headers[0].textContent = 'P1';
+    headers[1].textContent = 'P2';
+  }
+
   updateTurnBar();
   updateParityHint();
+
+  // If AI goes first, trigger its move
+  if (vsAI && currentPlayer === aiPlayer) {
+    triggerAIMove();
+  }
 }
 
 // ── AI Engine ──
@@ -969,19 +1005,22 @@ function getBestMove(maxDepth) {
   const availNums = [];
   for (let i = 1; i <= 10; i++) if (!usedNumbers.has(i)) availNums.push(i);
 
-  let bestScore = -Infinity;
+  // Scores are from P2's perspective (positive = P2 winning)
+  // AI as P2 maximizes; AI as P1 minimizes
+  const aiMaximizes = (aiPlayer === 2);
+  let bestScore = aiMaximizes ? -Infinity : Infinity;
   let bestMove = null;
 
-  // AI is P2 (maximizing)
   for (const cell of emptyCells) {
     for (const num of availNums) {
       board[cell] = num;
       usedNumbers.add(num);
-      const score = minimax(maxDepth - 1, false, -Infinity, Infinity);
+      // After AI moves, it's the opponent's turn
+      const score = minimax(maxDepth - 1, !aiMaximizes, -Infinity, Infinity);
       board[cell] = undefined;
       usedNumbers.delete(num);
 
-      if (score > bestScore) {
+      if (aiMaximizes ? (score > bestScore) : (score < bestScore)) {
         bestScore = score;
         bestMove = { cell, num };
       }
