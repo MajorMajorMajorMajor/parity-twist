@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Parity Twist</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg: #0f0e17;
+  --surface: #1a1a2e;
+  --surface2: #16213e;
+  --p1: #4ecca3;
+  --p2: #e94560;
+  --key: #0f3460;
+  --key-light: #3a86ff;
+  --text: #eaeaea;
+  --text-dim: #8892a0;
+  --gold: #ffd700;
+  --win-glow: rgba(78, 204, 163, 0.25);
+  --lose-glow: rgba(233, 69, 96, 0.25);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+  padding: 12px;
+  user-select: none;
+}
+
+h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin: 8px 0 4px;
+  background: linear-gradient(135deg, var(--p1), var(--key-light), var(--p2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+/* Turn indicator */
+.turn-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 20px;
+  border-radius: 20px;
+  background: var(--surface);
+  margin-bottom: 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+.turn-bar.p1-turn { border: 2px solid var(--p1); }
+.turn-bar.p2-turn { border: 2px solid var(--p2); }
+.turn-bar .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  transition: background 0.3s;
+}
+.turn-bar.p1-turn .dot { background: var(--p1); }
+.turn-bar.p2-turn .dot { background: var(--p2); }
+
+/* Game board */
+.board-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.col-headers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  width: 270px;
+  margin-bottom: 4px;
+}
+.col-headers span {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.col-headers .h-p1 { color: var(--p1); }
+.col-headers .h-p2 { color: var(--p2); }
+.col-headers .h-key { color: var(--key-light); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 90px);
+  grid-template-rows: repeat(3, 72px);
+  gap: 0;
+  border: 2px solid #2a2a4a;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #2a2a4a;
+}
+
+.cell {
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid #2a2a4a;
+  position: relative;
+}
+.cell:active { transform: scale(0.95); }
+.cell.selected {
+  background: var(--surface2);
+  box-shadow: inset 0 0 20px rgba(58, 134, 255, 0.3);
+}
+.cell.filled { cursor: default; }
+.cell.filled:active { transform: none; }
+
+.cell.col-0 { color: var(--p1); }
+.cell.col-1 { color: var(--p2); }
+.cell.col-2 { color: var(--key-light); }
+
+/* Row result indicators */
+.cell.row-win { box-shadow: inset 0 0 20px var(--win-glow); }
+.cell.row-lose { box-shadow: inset 0 0 20px var(--lose-glow); }
+
+/* Row labels */
+.row-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  margin-left: 6px;
+}
+
+/* Master Key */
+.master-key-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 6px;
+}
+.master-key-label {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+.master-key-cell {
+  width: 90px;
+  height: 72px;
+  background: var(--surface);
+  border: 2px solid var(--key);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--gold);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.master-key-cell:active { transform: scale(0.95); }
+.master-key-cell.selected {
+  background: var(--surface2);
+  box-shadow: inset 0 0 20px rgba(255, 215, 0, 0.2);
+  border-color: var(--gold);
+}
+.master-key-cell.filled { cursor: default; }
+.master-key-cell.filled:active { transform: none; }
+
+/* Number picker */
+.picker-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin: 14px 0 6px;
+  letter-spacing: 1px;
+}
+.number-picker {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  width: 280px;
+}
+.num-btn {
+  width: 48px;
+  height: 44px;
+  border: 2px solid #2a2a4a;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.num-btn:active { transform: scale(0.92); }
+.num-btn.used {
+  opacity: 0.2;
+  cursor: default;
+  text-decoration: line-through;
+}
+.num-btn.used:active { transform: none; }
+.num-btn.p1-placed { border-color: var(--p1); color: var(--p1); opacity: 0.4; }
+.num-btn.p2-placed { border-color: var(--p2); color: var(--p2); opacity: 0.4; }
+.num-btn.key-placed { border-color: var(--key-light); color: var(--key-light); opacity: 0.4; }
+.num-btn.mk-placed { border-color: var(--gold); color: var(--gold); opacity: 0.4; }
+
+/* Action buttons */
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.btn {
+  padding: 10px 22px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 1px;
+}
+.btn:active { transform: scale(0.95); }
+.btn-primary {
+  background: linear-gradient(135deg, var(--p1), var(--key-light));
+  color: var(--bg);
+}
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid #2a2a4a;
+}
+.btn-help {
+  background: var(--surface);
+  color: var(--text-dim);
+  border: 2px solid #2a2a4a;
+  font-size: 0.8rem;
+  padding: 8px 14px;
+}
+
+/* Result overlay */
+.result-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 14, 23, 0.92);
+  z-index: 100;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.4s;
+}
+.result-overlay.show { display: flex; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.result-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 28px 32px;
+  text-align: center;
+  max-width: 320px;
+  width: 90%;
+}
+.result-card h2 {
+  font-size: 1.5rem;
+  margin-bottom: 16px;
+}
+.result-card .winner-text { margin-bottom: 6px; }
+.result-card .row-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin: 6px 0;
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.85rem;
+}
+.result-card .row-result .winner-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.result-card .row-result .winner-badge.p1-win { background: var(--p1); color: var(--bg); }
+.result-card .row-result .winner-badge.p2-win { background: var(--p2); color: white; }
+
+.parity-explain {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* Help modal */
+.help-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 14, 23, 0.95);
+  z-index: 200;
+  overflow-y: auto;
+  padding: 20px;
+  animation: fadeIn 0.3s;
+}
+.help-overlay.show { display: block; }
+.help-content {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 360px;
+  margin: 0 auto;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.help-content h2 {
+  color: var(--text);
+  font-size: 1.2rem;
+  margin-bottom: 12px;
+}
+.help-content h3 {
+  color: var(--text);
+  font-size: 0.95rem;
+  margin: 14px 0 6px;
+}
+.help-content .hl-p1 { color: var(--p1); font-weight: 700; }
+.help-content .hl-p2 { color: var(--p2); font-weight: 700; }
+.help-content .hl-key { color: var(--key-light); font-weight: 700; }
+.help-content .hl-mk { color: var(--gold); font-weight: 700; }
+.help-close {
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* Animations */
+@keyframes pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.cell-pop { animation: pop 0.3s ease-out; }
+
+/* Row result arrows / indicators on board */
+.row-indicator {
+  position: absolute;
+  right: -28px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.2rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Board wrapper with row indicators */
+.board-with-indicators {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.row-indicators {
+  display: flex;
+  flex-direction: column;
+  margin-left: 8px;
+}
+.row-ind-item {
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  width: 40px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.row-ind-item.show { opacity: 1; }
+.row-ind-item.p1w { color: var(--p1); background: rgba(78, 204, 163, 0.1); }
+.row-ind-item.p2w { color: var(--p2); background: rgba(233, 69, 96, 0.1); }
+
+/* Parity hint at bottom */
+.parity-hint {
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-align: center;
+  min-height: 2.5em;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  width: 290px;
+  line-height: 1.4;
+}
+.parity-hint .even { color: var(--key-light); }
+.parity-hint .odd { color: var(--p2); }
+.parity-hint .low { color: var(--p1); }
+.parity-hint .high { color: var(--gold); }
+
+/* Menu overlay */
+.menu-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  z-index: 300;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.4s;
+}
+.menu-overlay.show { display: flex; }
+.menu-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.menu-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  background: linear-gradient(135deg, var(--p1), var(--key-light), var(--p2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 0;
+}
+.menu-sub {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  margin-bottom: 20px;
+}
+.menu-btn {
+  width: 200px;
+  padding: 14px;
+  font-size: 1rem;
+  text-align: center;
+  border: none;
+}
+.menu-btn-vs {
+  background: linear-gradient(135deg, var(--p1), var(--key-light));
+  color: var(--bg);
+}
+.menu-btn-ai {
+  background: linear-gradient(135deg, var(--p2), #ff6b6b);
+  color: white;
+}
+.difficulty-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  animation: fadeIn 0.3s;
+}
+.diff-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+.diff-btn {
+  width: 180px;
+  padding: 11px;
+  font-size: 0.85rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid #2a2a4a;
+  text-align: center;
+}
+.diff-btn:hover { border-color: var(--p2); }
+
+/* AI thinking pulse */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.ai-thinking { animation: pulse 1s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<!-- Menu overlay -->
+<div class="menu-overlay show" id="menuOverlay">
+  <div class="menu-card">
+    <div class="menu-title">PARITY TWIST</div>
+    <div class="menu-sub">STRATEGY GAME</div>
+    <button class="btn menu-btn menu-btn-vs" onclick="startGame(false)">VS PLAYER</button>
+    <button class="btn menu-btn menu-btn-ai" id="menuAIBtn" onclick="showDifficulty()">VS AI</button>
+    <div class="difficulty-panel" id="difficultyPanel" style="display:none;">
+      <div class="diff-label">SELECT DIFFICULTY</div>
+      <button class="btn diff-btn" onclick="startGame(true,'easy')">EASY</button>
+      <button class="btn diff-btn" onclick="startGame(true,'medium')">MEDIUM</button>
+      <button class="btn diff-btn" onclick="startGame(true,'hard')">HARD</button>
+    </div>
+  </div>
+</div>
+
+<h1>PARITY TWIST</h1>
+<div class="subtitle" id="subtitleText">STRATEGY GAME</div>
+
+<div class="turn-bar p1-turn" id="turnBar">
+  <span class="dot"></span>
+  <span id="turnText">Player 1's Turn</span>
+</div>
+
+<div class="board-container">
+  <div class="col-headers">
+    <span class="h-p1">P1</span>
+    <span class="h-p2">P2</span>
+    <span class="h-key">KEY</span>
+  </div>
+
+  <div class="board-with-indicators">
+    <div class="grid" id="grid"></div>
+    <div class="row-indicators" id="rowIndicators">
+      <div class="row-ind-item" id="rowInd0"></div>
+      <div class="row-ind-item" id="rowInd1"></div>
+      <div class="row-ind-item" id="rowInd2"></div>
+    </div>
+  </div>
+
+  <div class="master-key-area">
+    <div class="master-key-label">MASTER KEY</div>
+    <div class="master-key-cell" id="masterKey" onclick="selectCell('mk')"></div>
+  </div>
+</div>
+
+<div class="parity-hint" id="parityHint">
+  Tap a cell, then choose a number to place.
+</div>
+
+<div class="picker-label">AVAILABLE NUMBERS</div>
+<div class="number-picker" id="numberPicker"></div>
+
+<div class="actions">
+  <button class="btn btn-primary" onclick="showMenu()">NEW GAME</button>
+  <button class="btn btn-help" onclick="showHelp()">RULES</button>
+</div>
+
+<!-- Result overlay -->
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-card" id="resultCard"></div>
+</div>
+
+<!-- Help overlay -->
+<div class="help-overlay" id="helpOverlay">
+  <div class="help-content">
+    <h2>How to Play</h2>
+    <p><strong>Parity Twist</strong> is a 2-player strategy game. Compete to win 2 out of 3 rows!</p>
+
+    <h3>Setup</h3>
+    <p>The board has 3 columns: <span class="hl-p1">P1</span>, <span class="hl-p2">P2</span>, and <span class="hl-key">Key</span>, each with 3 rows. Below the Key column is the <span class="hl-mk">Master Key</span> cell.</p>
+
+    <h3>Gameplay</h3>
+    <p>Players take turns placing numbers <strong>1 to 10</strong> in any empty cell (in any column, or the Master Key). Each number can only be used once.</p>
+
+    <h3>Winning a Row</h3>
+    <p>After all 10 cells are filled, each row is scored:</p>
+    <p>Compare the <span class="hl-key">Key</span> number's parity (odd/even) with the <span class="hl-mk">Master Key</span>'s parity:</p>
+    <ul style="margin: 6px 0 6px 16px;">
+      <li><strong>Same parity</strong> (both odd or both even) &rarr; the <em>lower</em> number between P1 and P2 wins the row</li>
+      <li><strong>Different parity</strong> &rarr; the <em>higher</em> number wins the row</li>
+    </ul>
+    <p>Win <strong>2 out of 3</strong> rows to win the game!</p>
+
+    <h3>Strategy</h3>
+    <p>The Master Key affects ALL rows at once, making it a powerful move. Key column numbers determine the scoring rule per row. Plan ahead!</p>
+
+    <button class="btn btn-primary help-close" onclick="hideHelp()">GOT IT</button>
+  </div>
+</div>
+
+<script>
+// Game state
+let board = {}; // 'r0c0' ... 'r2c2', 'mk'
+let usedNumbers = new Set();
+let selectedCell = null;
+let currentPlayer = 1; // 1 or 2
+let turnCount = 0;
+let gameOver = false;
+let numberPlacements = {}; // number -> {cell, player}
+
+// AI state
+let vsAI = false;
+let aiDifficulty = 'medium';
+let aiThinking = false;
+
+// All cell IDs
+const ALL_CELLS = ['r0c0','r0c1','r0c2','r1c0','r1c1','r1c2','r2c0','r2c1','r2c2','mk'];
+
+function init() {
+  buildGrid();
+  buildPicker();
+  updateTurnBar();
+  updateParityHint();
+}
+
+function buildGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      const cell = document.createElement('div');
+      cell.className = `cell col-${c}`;
+      cell.id = `r${r}c${c}`;
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+      cell.onclick = () => selectCell(`r${r}c${c}`);
+      grid.appendChild(cell);
+    }
+  }
+}
+
+function buildPicker() {
+  const picker = document.getElementById('numberPicker');
+  picker.innerHTML = '';
+  for (let n = 1; n <= 10; n++) {
+    const btn = document.createElement('div');
+    btn.className = 'num-btn';
+    btn.id = `num-${n}`;
+    btn.textContent = n;
+    btn.onclick = () => placeNumber(n);
+    picker.appendChild(btn);
+  }
+}
+
+function selectCell(id) {
+  if (gameOver) return;
+  if (aiThinking) return;
+  if (board[id] !== undefined) return; // already filled
+
+  // Deselect previous
+  document.querySelectorAll('.cell.selected, .master-key-cell.selected').forEach(el => {
+    el.classList.remove('selected');
+  });
+
+  selectedCell = id;
+
+  if (id === 'mk') {
+    document.getElementById('masterKey').classList.add('selected');
+  } else {
+    document.getElementById(id).classList.add('selected');
+  }
+
+  updateParityHint();
+}
+
+function placeNumber(n) {
+  if (gameOver) return;
+  if (aiThinking) return;
+  if (usedNumbers.has(n)) return;
+  if (selectedCell === null) {
+    document.getElementById('parityHint').textContent = 'Tap a cell first!';
+    return;
+  }
+
+  doPlaceNumber(selectedCell, n);
+}
+
+function doPlaceNumber(cellId, n) {
+  // Place the number
+  board[cellId] = n;
+  usedNumbers.add(n);
+  numberPlacements[n] = { cell: cellId, player: currentPlayer };
+
+  // Update cell display
+  const el = cellId === 'mk'
+    ? document.getElementById('masterKey')
+    : document.getElementById(cellId);
+
+  el.textContent = n;
+  el.classList.remove('selected');
+  el.classList.add('filled', 'cell-pop');
+
+  // Update number picker
+  const numBtn = document.getElementById(`num-${n}`);
+  numBtn.classList.add('used');
+  if (cellId === 'mk') {
+    numBtn.classList.add('mk-placed');
+  } else {
+    const col = parseInt(cellId[3]);
+    if (col === 0) numBtn.classList.add('p1-placed');
+    else if (col === 1) numBtn.classList.add('p2-placed');
+    else numBtn.classList.add('key-placed');
+  }
+
+  selectedCell = null;
+  turnCount++;
+
+  // Check if game is over (all 10 cells filled)
+  if (turnCount >= 10) {
+    gameOver = true;
+    setTimeout(resolveGame, 500);
+  } else {
+    currentPlayer = currentPlayer === 1 ? 2 : 1;
+    updateTurnBar();
+
+    // Trigger AI move if applicable
+    if (vsAI && currentPlayer === 2 && !gameOver) {
+      triggerAIMove();
+    }
+  }
+
+  updateParityHint();
+}
+
+function triggerAIMove() {
+  aiThinking = true;
+  updateTurnBar();
+
+  setTimeout(() => {
+    const move = getAIMove();
+    aiThinking = false;
+    doPlaceNumber(move.cell, move.num);
+  }, 400);
+}
+
+function updateTurnBar() {
+  const bar = document.getElementById('turnBar');
+  const text = document.getElementById('turnText');
+  bar.className = `turn-bar p${currentPlayer}-turn`;
+
+  if (aiThinking) {
+    text.textContent = 'AI is thinking...';
+    bar.classList.add('ai-thinking');
+  } else if (vsAI) {
+    text.textContent = currentPlayer === 1 ? "Your Turn" : "AI's Turn";
+    bar.classList.remove('ai-thinking');
+  } else {
+    text.textContent = `Player ${currentPlayer}'s Turn`;
+    bar.classList.remove('ai-thinking');
+  }
+}
+
+function updateParityHint() {
+  const hint = document.getElementById('parityHint');
+
+  if (gameOver) {
+    hint.textContent = 'Game over! Check the results.';
+    return;
+  }
+
+  if (board['mk'] !== undefined) {
+    const mkVal = board['mk'];
+    const mkParity = mkVal % 2 === 0 ? 'even' : 'odd';
+    hint.innerHTML = `Master Key is <span class="${mkParity === 'even' ? 'even' : 'odd'}">${mkVal} (${mkParity})</span>. ` +
+      `Key matches &rarr; <span class="low">lower wins</span>. Key differs &rarr; <span class="high">higher wins</span>.`;
+  } else if (selectedCell === 'mk') {
+    hint.textContent = 'Place a number in the Master Key cell.';
+  } else if (selectedCell) {
+    const col = parseInt(selectedCell[3]);
+    const colName = ['P1', 'P2', 'Key'][col];
+    hint.textContent = `Placing in ${colName} column. Choose a number.`;
+  } else {
+    hint.textContent = 'Tap a cell, then choose a number to place.';
+  }
+}
+
+function resolveGame() {
+  const mk = board['mk'];
+  const mkEven = mk % 2 === 0;
+  let p1Wins = 0, p2Wins = 0;
+  const rowResults = [];
+
+  for (let r = 0; r < 3; r++) {
+    const p1Val = board[`r${r}c0`];
+    const p2Val = board[`r${r}c1`];
+    const keyVal = board[`r${r}c2`];
+    const keyEven = keyVal % 2 === 0;
+    const parityMatch = mkEven === keyEven;
+
+    let winner;
+    if (parityMatch) {
+      winner = p1Val < p2Val ? 1 : 2;
+    } else {
+      winner = p1Val > p2Val ? 1 : 2;
+    }
+
+    rowResults.push({
+      row: r, p1Val, p2Val, keyVal, mk, parityMatch, winner,
+      rule: parityMatch ? 'lower wins' : 'higher wins'
+    });
+
+    if (winner === 1) p1Wins++;
+    else p2Wins++;
+
+    // Highlight cells
+    const p1Cell = document.getElementById(`r${r}c0`);
+    const p2Cell = document.getElementById(`r${r}c1`);
+    if (winner === 1) {
+      p1Cell.classList.add('row-win');
+      p2Cell.classList.add('row-lose');
+    } else {
+      p2Cell.classList.add('row-win');
+      p1Cell.classList.add('row-lose');
+    }
+
+    // Row indicator
+    const ind = document.getElementById(`rowInd${r}`);
+    ind.textContent = winner === 1 ? (vsAI ? 'YOU' : 'P1') : (vsAI ? 'AI' : 'P2');
+    ind.className = `row-ind-item show ${winner === 1 ? 'p1w' : 'p2w'}`;
+  }
+
+  showResult(p1Wins, p2Wins, rowResults);
+}
+
+function showResult(p1Wins, p2Wins, rowResults) {
+  const overlay = document.getElementById('resultOverlay');
+  const card = document.getElementById('resultCard');
+
+  let overallWinner = p1Wins >= 2 ? 1 : 2;
+  let winColor = overallWinner === 1 ? 'var(--p1)' : 'var(--p2)';
+
+  let winnerLabel;
+  if (vsAI) {
+    winnerLabel = overallWinner === 1 ? 'You Win!' : 'AI Wins!';
+  } else {
+    winnerLabel = `Player ${overallWinner} Wins!`;
+  }
+
+  const p1Label = vsAI ? 'You' : 'P1';
+  const p2Label = vsAI ? 'AI' : 'P2';
+
+  let html = `<h2 style="color:${winColor}">${winnerLabel}</h2>`;
+  html += `<div class="winner-text" style="font-size:0.85rem;color:var(--text-dim);margin-bottom:14px;">Score: ${p1Label} ${p1Wins} &ndash; ${p2Label} ${p2Wins}</div>`;
+
+  for (const rr of rowResults) {
+    const parityStr = rr.parityMatch ? 'match' : 'differ';
+    const rwLabel = rr.winner === 1 ? p1Label : p2Label;
+    html += `<div class="row-result">
+      <span>Row ${rr.row + 1}: ${rr.p1Val} vs ${rr.p2Val}</span>
+      <span class="winner-badge ${rr.winner === 1 ? 'p1-win' : 'p2-win'}">${rwLabel}</span>
+    </div>`;
+    html += `<div class="parity-explain">Key=${rr.keyVal}(${rr.keyVal%2===0?'even':'odd'}) & MK=${rr.mk}(${rr.mk%2===0?'even':'odd'}) ${parityStr} &rarr; ${rr.rule}</div>`;
+  }
+
+  html += `<div style="margin-top:18px;">
+    <button class="btn btn-primary" onclick="hideResult(); newGame();">PLAY AGAIN</button>
+    <button class="btn btn-secondary" style="margin-left:8px;" onclick="hideResult(); showMenu();">MENU</button>
+  </div>`;
+
+  card.innerHTML = html;
+  overlay.classList.add('show');
+}
+
+function hideResult() {
+  document.getElementById('resultOverlay').classList.remove('show');
+}
+
+function showHelp() {
+  document.getElementById('helpOverlay').classList.add('show');
+}
+
+function hideHelp() {
+  document.getElementById('helpOverlay').classList.remove('show');
+}
+
+// ── Menu ──
+
+function showMenu() {
+  hideResult();
+  document.getElementById('difficultyPanel').style.display = 'none';
+  document.getElementById('menuAIBtn').style.display = '';
+  document.getElementById('menuOverlay').classList.add('show');
+}
+
+function showDifficulty() {
+  document.getElementById('difficultyPanel').style.display = 'flex';
+  document.getElementById('menuAIBtn').style.display = 'none';
+}
+
+function startGame(ai, difficulty) {
+  vsAI = ai;
+  aiDifficulty = difficulty || 'medium';
+  document.getElementById('menuOverlay').classList.remove('show');
+  document.getElementById('subtitleText').textContent = vsAI
+    ? `VS AI (${aiDifficulty.toUpperCase()})`
+    : '2-PLAYER';
+  newGame();
+}
+
+function newGame() {
+  board = {};
+  usedNumbers.clear();
+  selectedCell = null;
+  currentPlayer = 1;
+  turnCount = 0;
+  gameOver = false;
+  numberPlacements = {};
+  aiThinking = false;
+
+  hideResult();
+
+  // Reset grid cells
+  document.querySelectorAll('.cell').forEach(el => {
+    el.textContent = '';
+    el.className = `cell col-${el.dataset.col}`;
+  });
+
+  // Reset master key
+  const mk = document.getElementById('masterKey');
+  mk.textContent = '';
+  mk.className = 'master-key-cell';
+
+  // Reset picker
+  document.querySelectorAll('.num-btn').forEach(btn => {
+    btn.className = 'num-btn';
+  });
+
+  // Reset row indicators
+  for (let i = 0; i < 3; i++) {
+    const ind = document.getElementById(`rowInd${i}`);
+    ind.className = 'row-ind-item';
+    ind.textContent = '';
+  }
+
+  updateTurnBar();
+  updateParityHint();
+}
+
+// ── AI Engine ──
+
+function getAIMove() {
+  if (aiDifficulty === 'easy') return getRandomMove();
+  if (aiDifficulty === 'medium') return getBestMove(2);
+  // Hard: adaptive depth
+  const movesLeft = 10 - turnCount;
+  const depth = movesLeft <= 6 ? movesLeft : 3;
+  return getBestMove(depth);
+}
+
+function getRandomMove() {
+  const emptyCells = ALL_CELLS.filter(c => board[c] === undefined);
+  const availNums = [];
+  for (let i = 1; i <= 10; i++) if (!usedNumbers.has(i)) availNums.push(i);
+  const cell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+  const num = availNums[Math.floor(Math.random() * availNums.length)];
+  return { cell, num };
+}
+
+function getBestMove(maxDepth) {
+  const emptyCells = ALL_CELLS.filter(c => board[c] === undefined);
+  const availNums = [];
+  for (let i = 1; i <= 10; i++) if (!usedNumbers.has(i)) availNums.push(i);
+
+  let bestScore = -Infinity;
+  let bestMove = null;
+
+  // AI is P2 (maximizing)
+  for (const cell of emptyCells) {
+    for (const num of availNums) {
+      board[cell] = num;
+      usedNumbers.add(num);
+      const score = minimax(maxDepth - 1, false, -Infinity, Infinity);
+      board[cell] = undefined;
+      usedNumbers.delete(num);
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = { cell, num };
+      }
+    }
+  }
+
+  return bestMove;
+}
+
+function minimax(depth, isMaximizing, alpha, beta) {
+  // Terminal: all cells filled
+  const movesLeft = ALL_CELLS.filter(c => board[c] === undefined).length;
+  if (movesLeft === 0) return evaluateTerminal();
+  if (depth === 0) return evaluateHeuristic();
+
+  const emptyCells = ALL_CELLS.filter(c => board[c] === undefined);
+  const availNums = [];
+  for (let i = 1; i <= 10; i++) if (!usedNumbers.has(i)) availNums.push(i);
+
+  if (isMaximizing) {
+    let best = -Infinity;
+    for (const cell of emptyCells) {
+      for (const num of availNums) {
+        board[cell] = num;
+        usedNumbers.add(num);
+        const score = minimax(depth - 1, false, alpha, beta);
+        board[cell] = undefined;
+        usedNumbers.delete(num);
+        best = Math.max(best, score);
+        alpha = Math.max(alpha, best);
+        if (beta <= alpha) return best;
+      }
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const cell of emptyCells) {
+      for (const num of availNums) {
+        board[cell] = num;
+        usedNumbers.add(num);
+        const score = minimax(depth - 1, true, alpha, beta);
+        board[cell] = undefined;
+        usedNumbers.delete(num);
+        best = Math.min(best, score);
+        beta = Math.min(beta, best);
+        if (beta <= alpha) return best;
+      }
+    }
+    return best;
+  }
+}
+
+function evaluateTerminal() {
+  // All cells filled — exact scoring
+  const mk = board['mk'];
+  const mkEven = mk % 2 === 0;
+  let p2Rows = 0;
+
+  for (let r = 0; r < 3; r++) {
+    const p1 = board[`r${r}c0`];
+    const p2 = board[`r${r}c1`];
+    const key = board[`r${r}c2`];
+    const match = mkEven === (key % 2 === 0);
+    const winner = match ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
+    p2Rows += winner === 2 ? 1 : -1;
+  }
+
+  // Return a large value scaled by how many rows won for clear win/loss
+  return p2Rows;
+}
+
+function evaluateHeuristic() {
+  const mk = board['mk'];
+  let score = 0;
+
+  for (let r = 0; r < 3; r++) {
+    const p1 = board[`r${r}c0`];
+    const p2 = board[`r${r}c1`];
+    const key = board[`r${r}c2`];
+
+    if (p1 != null && p2 != null && key != null && mk != null) {
+      // Fully determined row
+      const match = (mk % 2 === 0) === (key % 2 === 0);
+      const winner = match ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
+      score += winner === 2 ? 1 : -1;
+    } else if (p1 != null && p2 != null) {
+      // Both player values known, rule uncertain
+      if (mk != null) {
+        // MK known, Key unknown — estimate by remaining number parity
+        const mkEven = mk % 2 === 0;
+        let evens = 0, odds = 0;
+        for (let i = 1; i <= 10; i++) {
+          if (!usedNumbers.has(i)) {
+            if (i % 2 === 0) evens++; else odds++;
+          }
+        }
+        const total = evens + odds;
+        if (total === 0) continue;
+        // Probability key matches MK parity
+        const pMatch = mkEven ? evens / total : odds / total;
+        // match → lower wins, differ → higher wins
+        let s = 0;
+        if (p1 < p2) {
+          // lower→P1 wins(-1), higher→P2 wins(+1)
+          s = pMatch * (-1) + (1 - pMatch) * 1;
+        } else {
+          // lower→P2 wins(+1), higher→P1 wins(-1)
+          s = pMatch * 1 + (1 - pMatch) * (-1);
+        }
+        score += s * 0.7;
+      } else if (key != null) {
+        // Key known, MK unknown — similar logic
+        const keyEven = key % 2 === 0;
+        let evens = 0, odds = 0;
+        for (let i = 1; i <= 10; i++) {
+          if (!usedNumbers.has(i)) {
+            if (i % 2 === 0) evens++; else odds++;
+          }
+        }
+        const total = evens + odds;
+        if (total === 0) continue;
+        const pMatch = keyEven ? evens / total : odds / total;
+        let s = 0;
+        if (p1 < p2) {
+          s = pMatch * (-1) + (1 - pMatch) * 1;
+        } else {
+          s = pMatch * 1 + (1 - pMatch) * (-1);
+        }
+        score += s * 0.7;
+      } else {
+        // Neither MK nor Key known — roughly even, small bias
+        score += (p2 > p1 ? 0.1 : -0.1);
+      }
+    } else if (p1 != null || p2 != null) {
+      // Only one player value placed
+      const val = p1 != null ? p1 : p2;
+      const isP2 = p2 != null;
+      // High numbers give flexibility for higher-wins rule
+      // Low numbers give flexibility for lower-wins rule
+      // Slight advantage if placed value is extreme (1,2 or 9,10)
+      if (isP2) {
+        score += (val >= 7 ? 0.05 : val <= 3 ? 0.05 : 0);
+      } else {
+        score -= (val >= 7 ? 0.05 : val <= 3 ? 0.05 : 0);
+      }
+    }
+  }
+
+  // Small bonus for controlling Key column and Master Key
+  for (let r = 0; r < 3; r++) {
+    if (board[`r${r}c2`] != null) score += 0.03;
+  }
+  if (mk != null) score += 0.03;
+
+  return score;
+}
+
+// Initialize
+init();
+</script>
+</body>
+</html>
