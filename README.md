@@ -91,6 +91,54 @@ vercel --prod
 
 Or just open `web/index.html` in any browser — no server required.
 
+## Branches
+
+| Branch | Web URL | APK name |
+|--------|---------|----------|
+| `main` | https://parity-twist.vercel.app | `parity-twist.apk` |
+| `dev` | https://parity-twist-dev.vercel.app | `parity-twist-dev-v0.00-<rev>.apk` |
+
+The `dev` branch builds include a watermark (branch and rev ID) in the bottom-right corner of the game.
+
+## Dev Environment
+
+The `dev` branch has its own Vercel project (`parity-twist-dev`) to avoid accidentally deploying dev code to production.
+
+### Building the dev APK
+
+```bash
+git checkout dev
+bash build.sh
+```
+
+Output: `build/parity-twist-dev-v0.00-<rev>.apk`. The rev ID is the short git commit hash at build time.
+
+### Deploying dev to the web
+
+From the `dev` branch, deploy `web/` to the dev Vercel project using env vars:
+
+```bash
+cp assets/game.html web/index.html
+cd web
+VERCEL_ORG_ID=team_EmWFQ8bH8Vr73Ied2rfX5cHh \
+VERCEL_PROJECT_ID=prj_qRCCwl8MuFf2vjXIKAhIbZMbFwx5 \
+vercel --yes --prod
+```
+
+This targets `parity-twist-dev.vercel.app` regardless of any local `.vercel/` link config.
+
+### Promoting dev to production
+
+When dev is ready, merge into main and deploy from there:
+
+```bash
+git checkout main
+git merge dev
+cp assets/game.html web/index.html
+bash build.sh
+cd web && vercel --prod
+```
+
 ## Development
 
 All game logic lives in `assets/game.html`. To make changes:
@@ -99,7 +147,7 @@ All game logic lives in `assets/game.html`. To make changes:
 2. Test by opening it directly in a browser
 3. Copy to `web/index.html` when ready
 4. Rebuild APK with `bash build.sh`
-5. Deploy web with `vercel --prod` from `web/`
+5. Deploy web with the appropriate Vercel project (see above)
 
 ### Architecture Notes
 
