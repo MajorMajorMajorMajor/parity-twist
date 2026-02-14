@@ -17,6 +17,18 @@ After all 10 cells are filled, each row is scored:
 
 The Master Key affects all three rows at once, making it the most powerful cell on the board.
 
+## Variants
+
+You can choose a ruleset before each game:
+
+- **Classic** — Original 10-cell game (3 rows + 1 Master Key).
+- **Delfs Variant** — 9-cell game with no Master Key cell; parity uses the sum of the Key column.
+- **Dual Master Keys** — Uses two master cells: odd-key rows use MASTER ODD, even-key rows use MASTER EVEN.
+- **Key Locking** — Filling a Key cell locks that row’s P1/P2 cells for one opponent turn.
+- **Draft + Place** — Each turn has two phases: draft from market, then place from your hand.
+- **Best of 5 Rows** — Expanded 5-row board; first to 3 row wins takes the game.
+- **Hidden Master Key** — Master Key value stays hidden until endgame scoring.
+
 ## Game Modes
 
 ### VS Player
