@@ -23,7 +23,7 @@ You can choose a ruleset before each game:
 
 - **Classic** — Original 10-cell game (3 rows + 1 Master Key).
 - **Delfs** — 9-cell game with no Master Key cell; parity uses the sum of the Key column.
-- **Whiteacre Variant** — Delfs-style scoring with numbers 1-12; place 9 numbers and leave 2 unplayed.
+- **Whiteacre** — Normal Master Key scoring with numbers 1-12; fill 10 cells and leave 2 numbers unplayed.
 - **Dual Master Keys** — Uses two master cells: odd-key rows use MASTER ODD, even-key rows use MASTER EVEN.
 - **Key Locking** — Filling a Key cell locks that row’s P1/P2 cells for one opponent turn.
 - **Draft + Place** — Each turn has two phases: draft from market, then place from your hand.
