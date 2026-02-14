@@ -709,6 +709,14 @@ const VARIANTS = {
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: false, hiddenMaster: false
   },
+  'sandkuhler': {
+    id: 'sandkuhler', label: 'Sandkühler',
+    desc: 'Classic scoring, but Master Key cannot be last and must be placed by turn 6.',
+    rows: 3, numbers: 10,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false,
+    masterDeadlineTurn: 6
+  },
   'lanier': {
     id: 'lanier', label: 'Lanier',
     desc: 'Use number cards 0-9. Play from a hand, then draw back up to 3 after each turn.',
@@ -745,13 +753,6 @@ const VARIANTS = {
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: true, hiddenMaster: false
   },
-  'hidden-master': {
-    id: 'hidden-master', label: 'Hidden Master Key',
-    desc: 'Master Key is hidden after placement and revealed only at scoring.',
-    rows: 3, numbers: 10,
-    masters: [{ id: 'mk', label: 'HIDDEN MASTER KEY' }],
-    keyLock: false, draft: false, hiddenMaster: true
-  }
 };
 
 let selectedVariantId = 'classic';
@@ -972,11 +973,22 @@ function isCellLocked(id) {
   return rowLocks[row] > 0;
 }
 
+function isSandkuhlerMasterForced(simBoard, placedCount) {
+  if (currentVariant.id !== 'sandkuhler') return false;
+  if (simBoard['mk'] !== undefined) return false;
+  const deadline = (currentVariant.masterDeadlineTurn ?? 6) - 1;
+  return placedCount >= deadline;
+}
+
 function selectCell(id) {
   if (gameOver || aiThinking) return;
   if (board[id] !== undefined) return;
   if (isCellLocked(id)) {
     document.getElementById('parityHint').textContent = 'That row is temporarily locked.';
+    return;
+  }
+  if (isSandkuhlerMasterForced(board, turnCount) && id !== 'mk') {
+    document.getElementById('parityHint').textContent = 'Sandkühler rule: Master Key must be placed now.';
     return;
   }
 
@@ -1149,11 +1161,13 @@ function triggerAIMove() {
 }
 
 function getLegalEmptyCells() {
-  return getAllCells().filter(c => board[c] === undefined && !isCellLocked(c));
+  let cells = getAllCells().filter(c => board[c] === undefined && !isCellLocked(c));
+  if (isSandkuhlerMasterForced(board, turnCount)) cells = cells.filter(c => c === 'mk');
+  return cells;
 }
 
 function getAIMove() {
-  const searchVariants = new Set(['classic', 'dual-master', 'key-lock']);
+  const searchVariants = new Set(['classic', 'sandkuhler', 'dual-master', 'key-lock']);
   if (!searchVariants.has(currentVariant.id)) return getRandomMove();
 
   if (aiDifficulty === 'easy') return getRandomMove();
@@ -1210,7 +1224,7 @@ function applyLocksAfterMove(locks, placedCell) {
 }
 
 function getLegalCellsForState(simBoard, simLocks) {
-  return getAllCells().filter(c => {
+  let cells = getAllCells().filter(c => {
     if (simBoard[c] !== undefined) return false;
     if (!currentVariant.keyLock || !c.startsWith('r')) return true;
     const row = parseInt(c[1], 10);
@@ -1218,6 +1232,10 @@ function getLegalCellsForState(simBoard, simLocks) {
     if (col === 2) return true;
     return (simLocks[row] || 0) === 0;
   });
+
+  const placedCount = Object.values(simBoard).filter(v => v !== undefined).length;
+  if (isSandkuhlerMasterForced(simBoard, placedCount)) cells = cells.filter(c => c === 'mk');
+  return cells;
 }
 
 function getRowRuleForBoard(simBoard, r) {
@@ -1530,6 +1548,11 @@ function updateParityHint() {
     return;
   }
 
+  if (isSandkuhlerMasterForced(board, turnCount)) {
+    hint.textContent = 'Sandkühler rule: Master Key must be placed now.';
+    return;
+  }
+
   if (currentVariant.id === 'dual-master') {
     const mo = board['mkOdd'];
     const me = board['mkEven'];
@@ -1616,9 +1639,9 @@ function renderHelpContent() {
   } else if (currentVariant.id === 'draft-place') {
     variantBits = `<h3>Variant Rule</h3>
       <p>Each turn has two phases: <strong>Draft</strong> one number from the market, then <strong>Place</strong> one number from your hand.</p>`;
-  } else if (currentVariant.id === 'hidden-master') {
+  } else if (currentVariant.id === 'sandkuhler') {
     variantBits = `<h3>Variant Rule</h3>
-      <p>The Master Key value stays hidden after placement and is revealed only at scoring time.</p>`;
+      <p>Master Key cannot be the last cell filled. If still empty by turn 6, the current player must place it immediately.</p>`;
   } else if (currentVariant.id === 'hodgkins') {
     variantBits = `<h3>Variant Rule</h3>
       <p>Parity row wins are worth <strong>2 points each</strong> (6 total), and each row awards <strong>+1 point</strong> to the P1/P2 value closest to that row's Key (3 total).</p>
@@ -1742,7 +1765,7 @@ function startGame(ai, turnOrder) {
   }
 
   document.getElementById('menuOverlay').classList.remove('show');
-  const searchVariants = new Set(['classic', 'dual-master', 'key-lock']);
+  const searchVariants = new Set(['classic', 'sandkuhler', 'dual-master', 'key-lock']);
   const aiNote = searchVariants.has(currentVariant.id) ? aiDifficulty.toUpperCase() : 'RANDOM';
   document.getElementById('subtitleText').textContent = vsAI
     ? `VS AI (${aiNote}) • ${currentVariant.label.toUpperCase()}`
