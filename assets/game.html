@@ -580,6 +580,19 @@ h1 {
   color: var(--text-dim);
   line-height: 1.35;
 }
+.variant-select-btn {
+  margin-top: 8px;
+  padding: 6px 0;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  background: var(--key-light);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
 
 /* AI thinking pulse */
 @keyframes pulse {
@@ -613,9 +626,9 @@ h1 {
     </div>
 
     <div class="variant-screen" id="variantScreen">
+      <button class="btn diff-btn" onclick="hideVariantChooser()">BACK</button>
       <div class="diff-label">CHOOSE A VARIANT</div>
       <div id="variantList"></div>
-      <button class="btn diff-btn" onclick="hideVariantChooser()">BACK</button>
     </div>
   </div>
 </div>
@@ -1696,26 +1709,43 @@ function updateVariantButton() {
   btn.textContent = `VARIANT: ${v.label.toUpperCase()}`;
 }
 
+let expandedVariantId = null;
+
 function renderVariantChooser() {
   const list = document.getElementById('variantList');
   if (!list) return;
   list.innerHTML = '';
 
   for (const v of Object.values(VARIANTS)) {
+    const isExpanded = v.id === expandedVariantId;
+    const isSelected = v.id === selectedVariantId;
     const card = document.createElement('div');
-    card.className = `variant-card${v.id === selectedVariantId ? ' active' : ''}`;
+    card.className = `variant-card${isSelected ? ' active' : ''}`;
     card.onclick = () => {
-      selectedVariantId = v.id;
+      expandedVariantId = expandedVariantId === v.id ? null : v.id;
       renderVariantChooser();
-      updateVariantButton();
     };
 
-    card.innerHTML = `<div class="variant-card-title">${v.label}</div><div class="variant-card-desc">${v.desc}</div>`;
+    let html = `<div class="variant-card-title">${v.label}${isSelected ? ' ✓' : ''}</div>`;
+    if (isExpanded) {
+      html += `<div class="variant-card-desc">${v.desc}</div>`;
+      if (!isSelected) {
+        html += `<button class="variant-select-btn" onclick="event.stopPropagation(); confirmVariant('${v.id}')">SELECT</button>`;
+      }
+    }
+    card.innerHTML = html;
     list.appendChild(card);
   }
 }
 
+function confirmVariant(id) {
+  selectedVariantId = id;
+  updateVariantButton();
+  hideVariantChooser();
+}
+
 function showVariantChooser() {
+  expandedVariantId = null;
   document.getElementById('variantScreen').classList.add('show');
   document.getElementById('menuVariantBtn').style.display = 'none';
   document.getElementById('menuVsBtn').style.display = 'none';
