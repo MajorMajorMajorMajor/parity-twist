@@ -834,6 +834,14 @@ const VARIANTS = {
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: true, draft: false, hiddenMaster: false
   },
+  'peltola': {
+    id: 'peltola', label: 'Peltola',
+    desc: 'Quarto-style twist: you choose the next number your opponent must place.',
+    rows: 3, numbers: 10,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false,
+    peltola: true
+  },
   'dual-master': {
     id: 'dual-master', label: 'Dual Master Keys',
     desc: 'Odd-key rows use MASTER ODD, even-key rows use MASTER EVEN.',
@@ -882,6 +890,10 @@ let playerHands = { 1: [], 2: [] };
 let marketNumbers = [];
 let draftedThisTurn = false;
 let lanierDeck = [];
+
+// Peltola state
+let peltolaSelectedFor = { 1: null, 2: null };
+let peltolaChoosingFor = null;
 
 // AI state
 let vsAI = false;
@@ -999,6 +1011,11 @@ function buildPicker() {
     return;
   }
 
+  if (currentVariant.peltola) {
+    renderPeltolaPicker();
+    return;
+  }
+
   const { start, end } = getNumberRange();
   for (let n = start; n <= end; n++) {
     const btn = document.createElement('div');
@@ -1008,6 +1025,35 @@ function buildPicker() {
     btn.onclick = () => placeNumber(n);
     picker.appendChild(btn);
   }
+}
+
+function renderPeltolaPicker() {
+  const picker = document.getElementById('numberPicker');
+  picker.innerHTML = '';
+
+  if (peltolaChoosingFor != null) {
+    document.getElementById('pickerLabel').textContent = `CHOOSE FOR P${peltolaChoosingFor}`;
+    for (const n of getRemainingNumbers()) {
+      const btn = document.createElement('div');
+      btn.className = 'num-btn';
+      btn.id = `num-${n}`;
+      btn.textContent = n;
+      btn.onclick = () => choosePeltolaNumber(n);
+      picker.appendChild(btn);
+    }
+    return;
+  }
+
+  const forced = peltolaSelectedFor[currentPlayer];
+  document.getElementById('pickerLabel').textContent = `FORCED NUMBER FOR P${currentPlayer}`;
+  if (forced == null) return;
+
+  const btn = document.createElement('div');
+  btn.className = `num-btn${selectedNumber === forced ? ' selected' : ''}`;
+  btn.id = `num-${forced}`;
+  btn.textContent = forced;
+  btn.onclick = () => placeNumber(forced);
+  picker.appendChild(btn);
 }
 
 function renderDraftPicker() {
@@ -1092,6 +1138,10 @@ function isSandkuhlerMasterForced(simBoard, placedCount) {
 
 function selectCell(id) {
   if (gameOver || aiThinking) return;
+  if (currentVariant.peltola && peltolaChoosingFor != null) {
+    document.getElementById('parityHint').textContent = `Choose a number for P${peltolaChoosingFor} first.`;
+    return;
+  }
   if (board[id] !== undefined) return;
   if (isCellLocked(id)) {
     document.getElementById('parityHint').textContent = 'That row is temporarily locked.';
@@ -1135,7 +1185,15 @@ function draftNumber(n) {
 function placeNumber(n) {
   if (gameOver || aiThinking) return;
 
-  if (currentVariant.draft) {
+  if (currentVariant.peltola) {
+    if (peltolaChoosingFor != null) {
+      choosePeltolaNumber(n);
+      return;
+    }
+    const forced = peltolaSelectedFor[currentPlayer];
+    if (n !== forced) return;
+    if (usedNumbers.has(n)) return;
+  } else if (currentVariant.draft) {
     if (!draftedThisTurn) {
       document.getElementById('parityHint').textContent = 'Draft from market first.';
       return;
@@ -1157,6 +1215,27 @@ function placeNumber(n) {
   } else {
     updateParityHint();
   }
+}
+
+function choosePeltolaNumber(n) {
+  if (!currentVariant.peltola || peltolaChoosingFor == null || gameOver || aiThinking) return;
+  if (usedNumbers.has(n)) return;
+  if (!getRemainingNumbers().includes(n)) return;
+
+  peltolaSelectedFor[peltolaChoosingFor] = n;
+  peltolaChoosingFor = null;
+  selectedCell = null;
+  selectedNumber = null;
+  refreshNumberSelectionUI();
+
+  currentPlayer = currentPlayer === 1 ? 2 : 1;
+  decrementLocks();
+  refreshLockedCells();
+  buildPicker();
+  updateTurnBar();
+  updateParityHint();
+
+  if (vsAI && currentPlayer === aiPlayer && !gameOver) triggerAIMove();
 }
 
 function doPlaceNumber(cellId, n) {
@@ -1209,6 +1288,11 @@ function doPlaceNumber(cellId, n) {
   if (turnCount >= getAllCells().length) {
     gameOver = true;
     setTimeout(resolveGame, 350);
+  } else if (currentVariant.peltola) {
+    peltolaChoosingFor = currentPlayer === 1 ? 2 : 1;
+    buildPicker();
+    updateTurnBar();
+    if (vsAI && currentPlayer === aiPlayer && !gameOver) triggerAIMove();
   } else {
     currentPlayer = currentPlayer === 1 ? 2 : 1;
     draftedThisTurn = false;
@@ -1248,6 +1332,18 @@ function triggerAIMove() {
 
   setTimeout(() => {
     aiThinking = false;
+
+    if (currentVariant.peltola) {
+      if (peltolaChoosingFor != null) {
+        const options = getRemainingNumbers();
+        if (options.length) choosePeltolaNumber(randPick(options));
+        return;
+      }
+      const cells = getLegalEmptyCells();
+      const forced = peltolaSelectedFor[currentPlayer];
+      if (cells.length && forced != null) doPlaceNumber(randPick(cells), forced);
+      return;
+    }
 
     if (currentVariant.draft) {
       const d = randPick(marketNumbers);
@@ -1628,6 +1724,11 @@ function updateTurnBar() {
   if (aiThinking) {
     text.textContent = 'AI is thinking...';
     bar.classList.add('ai-thinking');
+  } else if (currentVariant.peltola && peltolaChoosingFor != null) {
+    text.textContent = vsAI
+      ? (currentPlayer === aiPlayer ? 'AI picks your number' : "Pick AI's number")
+      : `Player ${currentPlayer} chooses for P${peltolaChoosingFor}`;
+    bar.classList.remove('ai-thinking');
   } else if (vsAI) {
     text.textContent = currentPlayer === aiPlayer ? "AI's Turn" : 'Your Turn';
     bar.classList.remove('ai-thinking');
@@ -1641,6 +1742,18 @@ function updateParityHint() {
   const hint = document.getElementById('parityHint');
   if (gameOver) {
     hint.style.display = 'none';
+    return;
+  }
+
+  if (currentVariant.peltola) {
+    if (peltolaChoosingFor != null) {
+      hint.textContent = `Peltola: choose a number for P${peltolaChoosingFor} to place next.`;
+      return;
+    }
+    const forced = peltolaSelectedFor[currentPlayer];
+    hint.textContent = forced == null
+      ? 'Peltola: waiting for next assigned number.'
+      : `Peltola: you must place ${forced}. Choose a cell, then place it.`;
     return;
   }
 
@@ -1732,6 +1845,9 @@ function renderHelpContent() {
   } else if (currentVariant.id === 'whiteacre') {
     variantBits = `<h3>Variant Rule</h3>
       <p>Uses normal Master Key scoring, but with numbers <strong>1-12</strong>. You fill 10 cells and <strong>2 numbers remain unplayed</strong>.</p>`;
+  } else if (currentVariant.id === 'peltola') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>Quarto-style play: on your turn, you place the number assigned to you, then choose the next number your opponent must place.</p>`;
   } else if (currentVariant.id === 'lanier') {
     variantBits = `<h3>Variant Rule</h3>
       <p>Numbers are card-based: values <strong>0-9</strong>. Each player plays from hand, then draws back up to <strong>3 cards</strong> after their turn.</p>
@@ -1765,9 +1881,11 @@ function renderHelpContent() {
     ? 'Numbers are drafted and then placed.'
     : currentVariant.lanier
       ? 'Use a 0-9 deck. Play from your hand, then draw back up to 3 cards at end of turn.'
-      : currentVariant.id === 'key-sum-9'
-        ? 'There is no master cell; Key-column sum parity controls row scoring rules.'
-        : `The ${masterText} cell${currentVariant.id === 'dual-master' ? 's' : ''} control row scoring rules.`;
+      : currentVariant.id === 'peltola'
+        ? 'You place the number assigned to you, then choose the next number your opponent must place.'
+        : currentVariant.id === 'key-sum-9'
+          ? 'There is no master cell; Key-column sum parity controls row scoring rules.'
+          : `The ${masterText} cell${currentVariant.id === 'dual-master' ? 's' : ''} control row scoring rules.`;
 
   const objectiveText = currentVariant.id === 'hodgkins'
     ? 'Score the most points (typically 5+ out of 9).'
@@ -1969,6 +2087,8 @@ function newGame() {
   marketNumbers = [];
   draftedThisTurn = false;
   lanierDeck = [];
+  peltolaSelectedFor = { 1: null, 2: null };
+  peltolaChoosingFor = null;
 
   hideEndgame();
   buildGrid();
@@ -1984,6 +2104,9 @@ function newGame() {
     lanierDeck = shuffle(deckNums);
     drawLanierHand(1, 3);
     drawLanierHand(2, 3);
+    buildPicker();
+  } else if (currentVariant.peltola) {
+    peltolaSelectedFor[currentPlayer] = randPick(getRemainingNumbers());
     buildPicker();
   } else {
     buildPicker();
