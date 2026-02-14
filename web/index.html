@@ -702,6 +702,14 @@ const VARIANTS = {
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: false, hiddenMaster: false
   },
+  'lanier': {
+    id: 'lanier', label: 'Lanier',
+    desc: 'Use number cards 0-9. Play from a hand, then draw back up to 3 after each turn.',
+    rows: 3, numbers: 10, numberStart: 0,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false,
+    lanier: true
+  },
   'hodgkins': {
     id: 'hodgkins', label: 'Hodgkins',
     desc: 'Classic board scoring, plus row-closeness points: parity row wins are worth 2 each; closest-to-key in each row earns +1.',
@@ -751,10 +759,11 @@ let gameOver = false;
 let numberPlacements = {};
 let rowLocks = [];
 
-// Draft mode state
+// Draft/Lanier hand state
 let playerHands = { 1: [], 2: [] };
 let marketNumbers = [];
 let draftedThisTurn = false;
+let lanierDeck = [];
 
 // AI state
 let vsAI = false;
@@ -775,9 +784,16 @@ function getAllCells() {
   return [...getBoardCells(), ...currentVariant.masters.map(m => m.id)];
 }
 
+function getNumberRange() {
+  const start = currentVariant.numberStart ?? 1;
+  const end = start + currentVariant.numbers - 1;
+  return { start, end };
+}
+
 function getRemainingNumbers() {
   const nums = [];
-  for (let n = 1; n <= currentVariant.numbers; n++) if (!usedNumbers.has(n)) nums.push(n);
+  const { start, end } = getNumberRange();
+  for (let n = start; n <= end; n++) if (!usedNumbers.has(n)) nums.push(n);
   return nums;
 }
 
@@ -860,7 +876,13 @@ function buildPicker() {
     return;
   }
 
-  for (let n = 1; n <= currentVariant.numbers; n++) {
+  if (currentVariant.lanier) {
+    renderLanierPicker();
+    return;
+  }
+
+  const { start, end } = getNumberRange();
+  for (let n = start; n <= end; n++) {
     const btn = document.createElement('div');
     btn.className = 'num-btn';
     btn.id = `num-${n}`;
@@ -888,6 +910,21 @@ function renderDraftPicker() {
   }
 
   document.getElementById('pickerLabel').textContent = `PLACE FROM HAND (P${currentPlayer}: ${playerHands[currentPlayer].join(', ')})`;
+  for (const n of playerHands[currentPlayer]) {
+    const btn = document.createElement('div');
+    btn.className = `num-btn${selectedNumber === n ? ' selected' : ''}`;
+    btn.id = `num-${n}`;
+    btn.textContent = n;
+    btn.onclick = () => placeNumber(n);
+    picker.appendChild(btn);
+  }
+}
+
+function renderLanierPicker() {
+  const picker = document.getElementById('numberPicker');
+  picker.innerHTML = '';
+
+  document.getElementById('pickerLabel').textContent = `HAND (P${currentPlayer}: ${playerHands[currentPlayer].join(', ')})`;
   for (const n of playerHands[currentPlayer]) {
     const btn = document.createElement('div');
     btn.className = `num-btn${selectedNumber === n ? ' selected' : ''}`;
@@ -975,6 +1012,8 @@ function placeNumber(n) {
       return;
     }
     if (!playerHands[currentPlayer].includes(n)) return;
+  } else if (currentVariant.lanier) {
+    if (!playerHands[currentPlayer].includes(n)) return;
   } else {
     if (usedNumbers.has(n)) return;
   }
@@ -998,7 +1037,7 @@ function doPlaceNumber(cellId, n) {
 
   document.querySelectorAll('.cell.last-move, .master-key-cell.last-move').forEach(el => el.classList.remove('last-move'));
 
-  if (currentVariant.draft) {
+  if (currentVariant.draft || currentVariant.lanier) {
     const hand = playerHands[currentPlayer];
     const idx = hand.indexOf(n);
     if (idx >= 0) hand.splice(idx, 1);
@@ -1012,7 +1051,7 @@ function doPlaceNumber(cellId, n) {
     el.classList.add('filled', 'cell-pop', 'last-move');
   }
 
-  if (!currentVariant.draft) {
+  if (!currentVariant.draft && !currentVariant.lanier) {
     const numBtn = document.getElementById(`num-${n}`);
     if (numBtn) {
       numBtn.classList.add('used');
@@ -1036,6 +1075,8 @@ function doPlaceNumber(cellId, n) {
   refreshNumberSelectionUI();
   turnCount++;
 
+  if (currentVariant.lanier) drawLanierHand(currentPlayer, 3);
+
   if (turnCount >= getAllCells().length) {
     gameOver = true;
     setTimeout(resolveGame, 350);
@@ -1047,6 +1088,7 @@ function doPlaceNumber(cellId, n) {
     updateTurnBar();
 
     if (currentVariant.draft) renderDraftPicker();
+    else if (currentVariant.lanier) renderLanierPicker();
 
     if (vsAI && currentPlayer === aiPlayer && !gameOver) triggerAIMove();
   }
@@ -1081,6 +1123,13 @@ function triggerAIMove() {
     if (currentVariant.draft) {
       const d = randPick(marketNumbers);
       draftNumber(d);
+      const cells = getLegalEmptyCells();
+      const hand = playerHands[currentPlayer];
+      if (cells.length && hand.length) doPlaceNumber(randPick(cells), randPick(hand));
+      return;
+    }
+
+    if (currentVariant.lanier) {
       const cells = getLegalEmptyCells();
       const hand = playerHands[currentPlayer];
       if (cells.length && hand.length) doPlaceNumber(randPick(cells), randPick(hand));
@@ -1250,7 +1299,8 @@ function minimaxVariant(depth, isMaximizing, alpha, beta, simBoard, simUsed, sim
 
   const emptyCells = getLegalCellsForState(simBoard, simLocks);
   const availNums = [];
-  for (let i = 1; i <= currentVariant.numbers; i++) if (!simUsed.has(i)) availNums.push(i);
+  const { start, end } = getNumberRange();
+  for (let i = start; i <= end; i++) if (!simUsed.has(i)) availNums.push(i);
 
   if (isMaximizing) {
     let best = -Infinity;
@@ -1463,6 +1513,11 @@ function updateParityHint() {
     return;
   }
 
+  if (currentVariant.lanier) {
+    hint.textContent = `Play from hand (${playerHands[currentPlayer].join(', ')}). Deck remaining: ${lanierDeck.length}.`;
+    return;
+  }
+
   if (currentVariant.id === 'dual-master') {
     const mo = board['mkOdd'];
     const me = board['mkEven'];
@@ -1528,6 +1583,10 @@ function renderHelpContent() {
   } else if (currentVariant.id === 'whiteacre') {
     variantBits = `<h3>Variant Rule</h3>
       <p>Uses normal Master Key scoring, but with numbers <strong>1-12</strong>. You fill 10 cells and <strong>2 numbers remain unplayed</strong>.</p>`;
+  } else if (currentVariant.id === 'lanier') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>Numbers are card-based: values <strong>0-9</strong>. Each player plays from hand, then draws back up to <strong>3 cards</strong> after their turn.</p>
+      <p>Special ability cards can be layered onto this format for extra tactical effects.</p>`;
   } else if (currentVariant.id === 'dual-master') {
     variantBits = `<h3>Variant Rule</h3>
       <p>There are two global master keys:</p>
@@ -1555,9 +1614,11 @@ function renderHelpContent() {
     : 'Master Key';
   const setupRuleText = currentVariant.draft
     ? 'Numbers are drafted and then placed.'
-    : currentVariant.id === 'key-sum-9'
-      ? 'There is no master cell; Key-column sum parity controls row scoring rules.'
-      : `The ${masterText} cell${currentVariant.id === 'dual-master' ? 's' : ''} control row scoring rules.`;
+    : currentVariant.lanier
+      ? 'Use a 0-9 deck. Play from your hand, then draw back up to 3 cards at end of turn.'
+      : currentVariant.id === 'key-sum-9'
+        ? 'There is no master cell; Key-column sum parity controls row scoring rules.'
+        : `The ${masterText} cell${currentVariant.id === 'dual-master' ? 's' : ''} control row scoring rules.`;
 
   const objectiveText = currentVariant.id === 'hodgkins'
     ? 'Score the most points (typically 5+ out of 9).'
@@ -1683,6 +1744,22 @@ function refillMarket() {
   }
 }
 
+function shuffle(arr) {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function drawLanierHand(player, target = 3) {
+  if (!currentVariant.lanier) return;
+  while (playerHands[player].length < target && lanierDeck.length) {
+    playerHands[player].push(lanierDeck.pop());
+  }
+}
+
 function newGame() {
   board = {};
   usedNumbers.clear();
@@ -1698,6 +1775,7 @@ function newGame() {
   playerHands = { 1: [], 2: [] };
   marketNumbers = [];
   draftedThisTurn = false;
+  lanierDeck = [];
 
   hideEndgame();
   buildGrid();
@@ -1705,6 +1783,14 @@ function newGame() {
 
   if (currentVariant.draft) {
     refillMarket();
+    buildPicker();
+  } else if (currentVariant.lanier) {
+    const { start, end } = getNumberRange();
+    const deckNums = [];
+    for (let n = start; n <= end; n++) deckNums.push(n);
+    lanierDeck = shuffle(deckNums);
+    drawLanierHand(1, 3);
+    drawLanierHand(2, 3);
     buildPicker();
   } else {
     buildPicker();
