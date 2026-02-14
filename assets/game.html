@@ -260,6 +260,10 @@ h1 {
   justify-content: center;
 }
 .num-btn:active { transform: scale(0.92); }
+.num-btn.selected {
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.35);
+}
 .num-btn.used {
   opacity: 0.2;
   cursor: default;
@@ -726,6 +730,7 @@ let currentVariant = VARIANTS.classic;
 let board = {};
 let usedNumbers = new Set();
 let selectedCell = null;
+let selectedNumber = null;
 let currentPlayer = 1;
 let turnCount = 0;
 let gameOver = false;
@@ -860,6 +865,7 @@ function renderDraftPicker() {
     for (const n of marketNumbers) {
       const btn = document.createElement('div');
       btn.className = 'num-btn';
+      btn.id = `num-${n}`;
       btn.textContent = n;
       btn.onclick = () => draftNumber(n);
       picker.appendChild(btn);
@@ -870,7 +876,8 @@ function renderDraftPicker() {
   document.getElementById('pickerLabel').textContent = `PLACE FROM HAND (P${currentPlayer}: ${playerHands[currentPlayer].join(', ')})`;
   for (const n of playerHands[currentPlayer]) {
     const btn = document.createElement('div');
-    btn.className = 'num-btn';
+    btn.className = `num-btn${selectedNumber === n ? ' selected' : ''}`;
+    btn.id = `num-${n}`;
     btn.textContent = n;
     btn.onclick = () => placeNumber(n);
     picker.appendChild(btn);
@@ -883,6 +890,19 @@ function isMasterCell(id) {
 
 function getCellEl(id) {
   return document.getElementById(id);
+}
+
+function refreshNumberSelectionUI() {
+  document.querySelectorAll('.num-btn.selected').forEach(el => el.classList.remove('selected'));
+  if (selectedNumber == null) return;
+  const btn = document.getElementById(`num-${selectedNumber}`);
+  if (btn) btn.classList.add('selected');
+}
+
+function trySubmitSelectedMove() {
+  if (selectedCell == null || selectedNumber == null) return false;
+  doPlaceNumber(selectedCell, selectedNumber);
+  return true;
 }
 
 function isCellLocked(id) {
@@ -902,10 +922,20 @@ function selectCell(id) {
     return;
   }
 
+  const prevCell = selectedCell;
   document.querySelectorAll('.cell.selected, .master-key-cell.selected').forEach(el => el.classList.remove('selected'));
+
+  if (prevCell === id) {
+    selectedCell = null;
+    updateParityHint();
+    return;
+  }
+
   selectedCell = id;
   const el = getCellEl(id);
   if (el) el.classList.add('selected');
+
+  if (trySubmitSelectedMove()) return;
   updateParityHint();
 }
 
@@ -935,12 +965,16 @@ function placeNumber(n) {
     if (usedNumbers.has(n)) return;
   }
 
-  if (selectedCell === null) {
-    document.getElementById('parityHint').textContent = 'Tap a cell first!';
-    return;
-  }
+  selectedNumber = (selectedNumber === n) ? null : n;
+  refreshNumberSelectionUI();
 
-  doPlaceNumber(selectedCell, n);
+  if (trySubmitSelectedMove()) return;
+
+  if (selectedNumber != null && selectedCell == null) {
+    document.getElementById('parityHint').textContent = 'Number selected. Tap a cell to place it.';
+  } else {
+    updateParityHint();
+  }
 }
 
 function doPlaceNumber(cellId, n) {
@@ -984,6 +1018,8 @@ function doPlaceNumber(cellId, n) {
   }
 
   selectedCell = null;
+  selectedNumber = null;
+  refreshNumberSelectionUI();
   turnCount++;
 
   if (turnCount >= getAllCells().length) {
@@ -1558,6 +1594,7 @@ function newGame() {
   board = {};
   usedNumbers.clear();
   selectedCell = null;
+  selectedNumber = null;
   currentPlayer = 1;
   turnCount = 0;
   gameOver = false;
@@ -1580,6 +1617,8 @@ function newGame() {
     buildPicker();
     document.getElementById('pickerLabel').textContent = 'AVAILABLE NUMBERS';
   }
+
+  refreshNumberSelectionUI();
 
   const headers = document.querySelectorAll('.col-headers span');
   if (vsAI) {
