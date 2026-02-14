@@ -499,7 +499,16 @@ h1 {
   font-size: 0.8rem;
   color: var(--text-dim);
   letter-spacing: 2px;
-  margin-bottom: 20px;
+  margin-bottom: 6px;
+}
+.menu-credit {
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  color: var(--gold);
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.25);
+  margin-bottom: 10px;
 }
 .menu-btn {
   width: 200px;
@@ -546,7 +555,7 @@ h1 {
 .variant-selector-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 .variant-display {
@@ -563,19 +572,58 @@ h1 {
   text-align: left;
   display: flex;
   align-items: center;
+  cursor: pointer;
 }
-.menu-btn-variant-open {
+.menu-btn-variant-open,
+.menu-btn-variant-random {
   width: 44px;
   height: 44px;
   padding: 0;
   border-radius: 10px;
-  border: 2px solid #ad7e00;
-  background: linear-gradient(135deg, #ffd95a, #ffbf00);
-  color: #352600;
   font-size: 1rem;
   font-weight: 900;
 }
+.menu-btn-variant-open {
+  border: 2px solid #ad7e00;
+  background: linear-gradient(135deg, #ffd95a, #ffbf00);
+  color: #352600;
+}
 .menu-btn-variant-open:hover { border-color: #ffe08a; }
+.menu-btn-variant-random {
+  border: 2px solid #2d8c45;
+  background: linear-gradient(135deg, #56d47b, #2dbd5c);
+  color: #032910;
+  font-size: 0.74rem;
+  letter-spacing: 0.6px;
+}
+.menu-btn-variant-random:hover { border-color: #8af4a9; }
+.menu-variant-rule {
+  width: min(92vw, 360px);
+  display: none;
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 2px solid #2a2a4a;
+  background: linear-gradient(160deg, rgba(26, 26, 46, 0.96), rgba(22, 33, 62, 0.96));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+.menu-variant-rule.show { display: block; }
+.menu-variant-rule-title {
+  font-size: 0.74rem;
+  color: var(--gold);
+  letter-spacing: 1.5px;
+  margin-bottom: 5px;
+}
+.menu-variant-rule-name {
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.menu-variant-rule-desc {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
 .variant-screen {
   width: min(92vw, 360px);
   max-height: 72vh;
@@ -641,11 +689,13 @@ h1 {
   <div class="menu-card">
     <div class="menu-title">PARITY TWIST</div>
     <div class="menu-sub">STRATEGY GAME</div>
+    <div class="menu-credit">Game by Dave Elliston</div>
     <div class="variant-selector-block" id="variantSelectorBlock">
       <div class="diff-label">SELECTED VARIANT</div>
       <div class="variant-selector-row">
-        <div class="variant-display" id="selectedVariantDisplay">CLASSIC</div>
-        <button class="btn menu-btn-variant-open" id="menuVariantBtn" onclick="showVariantChooser()" aria-label="Choose variant">✦</button>
+        <div class="variant-display" id="selectedVariantDisplay" onclick="showVariantChooser()">CLASSIC</div>
+        <button class="btn menu-btn-variant-open" id="menuVariantBtn" onclick="showVariantChooser()" aria-label="Choose variant">↻</button>
+        <button class="btn menu-btn-variant-random" id="menuVariantRandomBtn" onclick="pickRandomVariant()" aria-label="Random variant">RND</button>
       </div>
     </div>
     <button class="btn menu-btn menu-btn-vs" id="menuVsBtn" onclick="startGame(false)">VS PLAYER</button>
@@ -667,6 +717,12 @@ h1 {
       <button class="btn diff-btn" onclick="hideVariantChooser()">BACK</button>
       <div class="diff-label">CHOOSE A VARIANT</div>
       <div id="variantList"></div>
+    </div>
+
+    <div class="menu-variant-rule" id="menuVariantRule">
+      <div class="menu-variant-rule-title">VARIANT RULES</div>
+      <div class="menu-variant-rule-name" id="menuVariantRuleName"></div>
+      <div class="menu-variant-rule-desc" id="menuVariantRuleDesc"></div>
     </div>
   </div>
 </div>
@@ -1744,6 +1800,32 @@ function updateVariantButton() {
   const v = VARIANTS[selectedVariantId] || VARIANTS.classic;
   const display = document.getElementById('selectedVariantDisplay');
   if (display) display.textContent = v.label.toUpperCase();
+  updateVariantRuleBox(v);
+}
+
+function updateVariantRuleBox(v) {
+  const box = document.getElementById('menuVariantRule');
+  const name = document.getElementById('menuVariantRuleName');
+  const desc = document.getElementById('menuVariantRuleDesc');
+  if (!box || !name || !desc) return;
+
+  if (!v || v.id === 'classic') {
+    box.classList.remove('show');
+    return;
+  }
+
+  name.textContent = v.label.toUpperCase();
+  desc.textContent = v.desc;
+  box.classList.add('show');
+}
+
+function pickRandomVariant() {
+  const ids = Object.keys(VARIANTS);
+  if (!ids.length) return;
+  const options = ids.length > 1 ? ids.filter(id => id !== selectedVariantId) : ids;
+  selectedVariantId = randPick(options);
+  updateVariantButton();
+  renderVariantChooser();
 }
 
 let tappedVariantId = null;
@@ -1783,6 +1865,7 @@ function showVariantChooser() {
   tappedVariantId = null;
   document.getElementById('variantScreen').classList.add('show');
   document.getElementById('variantSelectorBlock').style.display = 'none';
+  document.getElementById('menuVariantRule').style.display = 'none';
   document.getElementById('menuVsBtn').style.display = 'none';
   document.getElementById('menuAIBtn').style.display = 'none';
   document.getElementById('difficultyPanel').style.display = 'none';
@@ -1793,6 +1876,7 @@ function showVariantChooser() {
 function hideVariantChooser() {
   document.getElementById('variantScreen').classList.remove('show');
   document.getElementById('variantSelectorBlock').style.display = '';
+  document.getElementById('menuVariantRule').style.display = '';
   document.getElementById('menuVsBtn').style.display = '';
   document.getElementById('menuAIBtn').style.display = '';
   document.getElementById('difficultyPanel').style.display = 'none';
