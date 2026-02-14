@@ -689,9 +689,16 @@ const VARIANTS = {
     keyLock: false, draft: false, hiddenMaster: false
   },
   'key-sum-9': {
-    id: 'key-sum-9', label: 'Delfs Variant',
+    id: 'key-sum-9', label: 'Delfs',
     desc: '9-box mode: no master cell; parity uses the sum of the Key column.',
     rows: 3, numbers: 9,
+    masters: [],
+    keyLock: false, draft: false, hiddenMaster: false
+  },
+  'whiteacre': {
+    id: 'whiteacre', label: 'Whiteacre Variant',
+    desc: 'Delfs-style board with numbers 1-12; place 9, leaving 2 unplayed.',
+    rows: 3, numbers: 12,
     masters: [],
     keyLock: false, draft: false, hiddenMaster: false
   },
@@ -715,13 +722,6 @@ const VARIANTS = {
     rows: 3, numbers: 10,
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: true, hiddenMaster: false
-  },
-  'best-of-5': {
-    id: 'best-of-5', label: 'Best of 5 Rows',
-    desc: 'Expanded board with 5 rows; win 3 rows to take the game.',
-    rows: 5, numbers: 16,
-    masters: [{ id: 'mk', label: 'MASTER KEY' }],
-    keyLock: false, draft: false, hiddenMaster: false
   },
   'hidden-master': {
     id: 'hidden-master', label: 'Hidden Master Key',
@@ -1166,7 +1166,7 @@ function getRowRuleForBoard(simBoard, r) {
     return { mkVal, mkLabel: mkId === 'mkOdd' ? 'MO' : 'ME', parityMatch };
   }
 
-  if (currentVariant.id === 'key-sum-9') {
+  if (currentVariant.id === 'key-sum-9' || currentVariant.id === 'whiteacre') {
     const keyValues = Array.from({ length: currentVariant.rows }, (_, i) => simBoard[`r${i}c2`]);
     const keySum = keyValues.reduce((acc, v) => acc + (v || 0), 0);
     const parityMatch = (keyVal % 2) === (keySum % 2);
@@ -1201,7 +1201,7 @@ function evaluateHeuristicForBoard(simBoard) {
     if (p1 != null && p2 != null && key != null) {
       const mastersReady = currentVariant.id === 'dual-master'
         ? (simBoard['mkOdd'] != null && simBoard['mkEven'] != null)
-        : currentVariant.id === 'key-sum-9'
+        : (currentVariant.id === 'key-sum-9' || currentVariant.id === 'whiteacre')
           ? Array.from({ length: currentVariant.rows }, (_, i) => simBoard[`r${i}c2`]).every(v => v != null)
           : (simBoard['mk'] != null);
       if (mastersReady) {
@@ -1226,7 +1226,7 @@ function evaluateHeuristicForBoard(simBoard) {
   if (currentVariant.id === 'dual-master') {
     if (simBoard['mkOdd'] != null) score += 0.02;
     if (simBoard['mkEven'] != null) score += 0.02;
-  } else if (currentVariant.id === 'key-sum-9') {
+  } else if (currentVariant.id === 'key-sum-9' || currentVariant.id === 'whiteacre') {
     const placedKeys = Array.from({ length: currentVariant.rows }, (_, i) => simBoard[`r${i}c2`]).filter(v => v != null).length;
     score += placedKeys * 0.01;
   } else {
@@ -1425,7 +1425,7 @@ function updateParityHint() {
     }
   }
 
-  if (currentVariant.id === 'key-sum-9') {
+  if (currentVariant.id === 'key-sum-9' || currentVariant.id === 'whiteacre') {
     const keyValues = Array.from({ length: currentVariant.rows }, (_, i) => board[`r${i}c2`]).filter(v => v != null);
     if (keyValues.length) {
       const keySum = keyValues.reduce((acc, v) => acc + v, 0);
@@ -1478,6 +1478,9 @@ function renderHelpContent() {
   if (currentVariant.id === 'key-sum-9') {
     variantBits = `<h3>Variant Rule</h3>
       <p>There is no separate Master Key cell. Add all Key-column values; that sum parity is the master rule for every row.</p>`;
+  } else if (currentVariant.id === 'whiteacre') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>Uses Delfs scoring (Key-column sum parity), but with numbers <strong>1-12</strong>. You place 9 numbers and <strong>2 remain unplayed</strong>.</p>`;
   } else if (currentVariant.id === 'dual-master') {
     variantBits = `<h3>Variant Rule</h3>
       <p>There are two global master keys:</p>
@@ -1491,9 +1494,6 @@ function renderHelpContent() {
   } else if (currentVariant.id === 'draft-place') {
     variantBits = `<h3>Variant Rule</h3>
       <p>Each turn has two phases: <strong>Draft</strong> one number from the market, then <strong>Place</strong> one number from your hand.</p>`;
-  } else if (currentVariant.id === 'best-of-5') {
-    variantBits = `<h3>Variant Rule</h3>
-      <p>The board has 5 rows. Win <strong>${needed} of ${rows}</strong> rows to win the game.</p>`;
   } else if (currentVariant.id === 'hidden-master') {
     variantBits = `<h3>Variant Rule</h3>
       <p>The Master Key value stays hidden after placement and is revealed only at scoring time.</p>`;
@@ -1504,7 +1504,7 @@ function renderHelpContent() {
     : 'Master Key';
   const setupRuleText = currentVariant.draft
     ? 'Numbers are drafted and then placed.'
-    : currentVariant.id === 'key-sum-9'
+    : (currentVariant.id === 'key-sum-9' || currentVariant.id === 'whiteacre')
       ? 'There is no master cell; Key-column sum parity controls row scoring rules.'
       : `The ${masterText} cell${currentVariant.id === 'dual-master' ? 's' : ''} control row scoring rules.`;
 
