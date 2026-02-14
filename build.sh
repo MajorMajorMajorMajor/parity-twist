@@ -15,8 +15,23 @@ TARGET_SDK=34
 
 REV_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-APK_NAME="parity-twist-dev-v0.00-${REV_ID}"
-echo "=== Parity Twist Dev Build ==="
+VERSION_FILE="$PROJECT_DIR/.dev-apk-version"
+
+if [ -f "$VERSION_FILE" ]; then
+    CURRENT_VERSION=$(tr -d '[:space:]' < "$VERSION_FILE")
+else
+    CURRENT_VERSION="0.10"
+fi
+
+if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]{2}$ ]]; then
+    echo "ERROR: Invalid version in $VERSION_FILE: '$CURRENT_VERSION' (expected N.NN, e.g. 0.10)"
+    exit 1
+fi
+
+IFS='.' read -r VERSION_MAJOR VERSION_MINOR <<< "$CURRENT_VERSION"
+APK_VERSION=$(printf "%d.%02d" "$VERSION_MAJOR" "$((10#$VERSION_MINOR))")
+APK_NAME="parity-twist-dev-v${APK_VERSION}-${REV_ID}"
+echo "=== Parity Twist Dev Build (v${APK_VERSION}) ==="
 
 # Auto-setup libs/ if missing
 mkdir -p "$LIBS_DIR"
@@ -119,7 +134,18 @@ apksigner sign \
     --ks-key-alias androiddebugkey \
     "$BUILD_DIR/${APK_NAME}.apk"
 
+# Bump version for next build
+NEXT_MAJOR=$VERSION_MAJOR
+NEXT_MINOR=$((10#$VERSION_MINOR + 1))
+if [ "$NEXT_MINOR" -ge 100 ]; then
+    NEXT_MAJOR=$((VERSION_MAJOR + 1))
+    NEXT_MINOR=0
+fi
+NEXT_VERSION=$(printf "%d.%02d" "$NEXT_MAJOR" "$NEXT_MINOR")
+echo "$NEXT_VERSION" > "$VERSION_FILE"
+
 echo ""
 echo "=== Build complete ==="
 echo "APK: $BUILD_DIR/${APK_NAME}.apk"
 ls -lh "$BUILD_DIR/${APK_NAME}.apk"
+echo "Next dev APK version: v${NEXT_VERSION}"
