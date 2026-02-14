@@ -23,13 +23,13 @@ You can choose a ruleset before each game:
 
 - **Classic** — Original 10-cell game (3 rows + 1 Master Key).
 - **Total Score** — Normal parity rules, but add the winning number from each row; highest total wins.
-- **Delfs** — 9-cell game with no Master Key cell; parity uses the sum of the Key column.
 - **Whiteacre** — Normal Master Key scoring with numbers 1-12; fill 10 cells and leave 2 numbers unplayed.
 - **Sandkühler** — Master Key cannot be the final placement; if still open by turn 6, it must be placed immediately.
-- **Lanier** — Play from a 0-9 card deck: each player keeps a 3-card hand, plays one card each turn, then draws back up to 3.
-- **Hodgkins** — Normal board rules, but parity row wins are worth 2 points each and each row gives +1 to the number closest to that row's Key.
-- **Dual Master Keys** — Uses two master cells: odd-key rows use MASTER ODD, even-key rows use MASTER EVEN.
+- **Delfs** — 9-cell game with no Master Key cell; parity uses the sum of the Key column.
 - **Key Locking** — Filling a Key cell locks that row’s P1/P2 cells for one opponent turn.
+- **Dual Master Keys** — Uses two master cells: odd-key rows use MASTER ODD, even-key rows use MASTER EVEN.
+- **Hodgkins** — Normal board rules, but parity row wins are worth 2 points each and each row gives +1 to the number closest to that row's Key.
+- **Lanier** — Play from a 0-9 card deck: each player keeps a 3-card hand, plays one card each turn, then draws back up to 3.
 - **Draft + Place** — Each turn has two phases: draft from market, then place from your hand.
 
 ## Game Modes

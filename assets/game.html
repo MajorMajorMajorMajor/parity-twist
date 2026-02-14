@@ -695,13 +695,6 @@ const VARIANTS = {
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: false, hiddenMaster: false
   },
-  'key-sum-9': {
-    id: 'key-sum-9', label: 'Delfs',
-    desc: '9-box mode: no master cell; parity uses the sum of the Key column.',
-    rows: 3, numbers: 9,
-    masters: [],
-    keyLock: false, draft: false, hiddenMaster: false
-  },
   'whiteacre': {
     id: 'whiteacre', label: 'Whiteacre',
     desc: 'Classic scoring with numbers 1-12; fill 10 cells and leave 2 unplayed.',
@@ -717,26 +710,11 @@ const VARIANTS = {
     keyLock: false, draft: false, hiddenMaster: false,
     masterDeadlineTurn: 6
   },
-  'lanier': {
-    id: 'lanier', label: 'Lanier',
-    desc: 'Use number cards 0-9. Play from a hand, then draw back up to 3 after each turn.',
-    rows: 3, numbers: 10, numberStart: 0,
-    masters: [{ id: 'mk', label: 'MASTER KEY' }],
-    keyLock: false, draft: false, hiddenMaster: false,
-    lanier: true
-  },
-  'hodgkins': {
-    id: 'hodgkins', label: 'Hodgkins',
-    desc: 'Classic board scoring, plus row-closeness points: parity row wins are worth 2 each; closest-to-key in each row earns +1.',
-    rows: 3, numbers: 10,
-    masters: [{ id: 'mk', label: 'MASTER KEY' }],
-    keyLock: false, draft: false, hiddenMaster: false
-  },
-  'dual-master': {
-    id: 'dual-master', label: 'Dual Master Keys',
-    desc: 'Odd-key rows use MASTER ODD, even-key rows use MASTER EVEN.',
-    rows: 3, numbers: 11,
-    masters: [{ id: 'mkOdd', label: 'MASTER ODD' }, { id: 'mkEven', label: 'MASTER EVEN' }],
+  'key-sum-9': {
+    id: 'key-sum-9', label: 'Delfs',
+    desc: '9-box mode: no master cell; parity uses the sum of the Key column.',
+    rows: 3, numbers: 9,
+    masters: [],
     keyLock: false, draft: false, hiddenMaster: false
   },
   'key-lock': {
@@ -745,6 +723,28 @@ const VARIANTS = {
     rows: 3, numbers: 10,
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: true, draft: false, hiddenMaster: false
+  },
+  'dual-master': {
+    id: 'dual-master', label: 'Dual Master Keys',
+    desc: 'Odd-key rows use MASTER ODD, even-key rows use MASTER EVEN.',
+    rows: 3, numbers: 11,
+    masters: [{ id: 'mkOdd', label: 'MASTER ODD' }, { id: 'mkEven', label: 'MASTER EVEN' }],
+    keyLock: false, draft: false, hiddenMaster: false
+  },
+  'hodgkins': {
+    id: 'hodgkins', label: 'Hodgkins',
+    desc: 'Classic board scoring, plus row-closeness points: parity row wins are worth 2 each; closest-to-key in each row earns +1.',
+    rows: 3, numbers: 10,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false
+  },
+  'lanier': {
+    id: 'lanier', label: 'Lanier',
+    desc: 'Use number cards 0-9. Play from a hand, then draw back up to 3 after each turn.',
+    rows: 3, numbers: 10, numberStart: 0,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false,
+    lanier: true
   },
   'draft-place': {
     id: 'draft-place', label: 'Draft + Place',
