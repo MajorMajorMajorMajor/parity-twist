@@ -528,14 +528,46 @@ h1 {
   text-align: center;
 }
 .diff-btn:hover { border-color: var(--p2); }
-.menu-select {
-  width: 220px;
-  padding: 10px;
-  border-radius: 10px;
-  border: 2px solid #2a2a4a;
+.menu-btn-variant {
   background: var(--surface);
   color: var(--text);
-  font-size: 0.85rem;
+  border: 2px solid #2a2a4a;
+}
+.variant-screen {
+  width: min(92vw, 360px);
+  max-height: 72vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 2px solid #2a2a4a;
+  border-radius: 14px;
+  padding: 10px;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+.variant-screen.show { display: flex; }
+.variant-card {
+  border: 2px solid #2a2a4a;
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--bg);
+  text-align: left;
+  cursor: pointer;
+}
+.variant-card.active {
+  border-color: var(--key-light);
+  box-shadow: inset 0 0 0 1px rgba(58, 134, 255, 0.4);
+}
+.variant-card-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.variant-card-desc {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.35;
 }
 
 /* AI thinking pulse */
@@ -553,16 +585,8 @@ h1 {
   <div class="menu-card">
     <div class="menu-title">PARITY TWIST</div>
     <div class="menu-sub">STRATEGY GAME</div>
-    <div class="diff-label">VARIANT</div>
-    <select id="variantSelect" class="menu-select">
-      <option value="classic">Classic</option>
-      <option value="dual-master">Dual Master Keys</option>
-      <option value="key-lock">Key Locking</option>
-      <option value="draft-place">Draft + Place</option>
-      <option value="best-of-5">Best of 5 Rows</option>
-      <option value="hidden-master">Hidden Master Key</option>
-    </select>
-    <button class="btn menu-btn menu-btn-vs" onclick="startGame(false)">VS PLAYER</button>
+    <button class="btn menu-btn menu-btn-variant" id="menuVariantBtn" onclick="showVariantChooser()">VARIANT: CLASSIC</button>
+    <button class="btn menu-btn menu-btn-vs" id="menuVsBtn" onclick="startGame(false)">VS PLAYER</button>
     <button class="btn menu-btn menu-btn-ai" id="menuAIBtn" onclick="showDifficulty()">VS AI</button>
     <div class="difficulty-panel" id="difficultyPanel" style="display:none;">
       <div class="diff-label">SELECT DIFFICULTY</div>
@@ -575,6 +599,12 @@ h1 {
       <button class="btn diff-btn" onclick="startGame(true,'human')">YOU</button>
       <button class="btn diff-btn" onclick="startGame(true,'ai')">AI</button>
       <button class="btn diff-btn" onclick="startGame(true,'random')">RANDOM</button>
+    </div>
+
+    <div class="variant-screen" id="variantScreen">
+      <div class="diff-label">CHOOSE A VARIANT</div>
+      <div id="variantList"></div>
+      <button class="btn diff-btn" onclick="hideVariantChooser()">BACK</button>
     </div>
   </div>
 </div>
@@ -641,37 +671,50 @@ h1 {
 <script>
 const VARIANTS = {
   classic: {
-    id: 'classic', label: 'Classic', rows: 3, numbers: 10,
+    id: 'classic', label: 'Classic',
+    desc: 'Original 3-row game with one Master Key affecting every row.',
+    rows: 3, numbers: 10,
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: false, hiddenMaster: false
   },
   'dual-master': {
-    id: 'dual-master', label: 'Dual Master Keys', rows: 3, numbers: 11,
+    id: 'dual-master', label: 'Dual Master Keys',
+    desc: 'Odd-key rows use MASTER ODD, even-key rows use MASTER EVEN.',
+    rows: 3, numbers: 11,
     masters: [{ id: 'mkOdd', label: 'MASTER ODD' }, { id: 'mkEven', label: 'MASTER EVEN' }],
     keyLock: false, draft: false, hiddenMaster: false
   },
   'key-lock': {
-    id: 'key-lock', label: 'Key Locking', rows: 3, numbers: 10,
+    id: 'key-lock', label: 'Key Locking',
+    desc: 'Placing a Key locks that row’s P1/P2 cells for one opponent turn.',
+    rows: 3, numbers: 10,
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: true, draft: false, hiddenMaster: false
   },
   'draft-place': {
-    id: 'draft-place', label: 'Draft + Place', rows: 3, numbers: 10,
+    id: 'draft-place', label: 'Draft + Place',
+    desc: 'Each turn: draft a number from market, then place from your hand.',
+    rows: 3, numbers: 10,
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: true, hiddenMaster: false
   },
   'best-of-5': {
-    id: 'best-of-5', label: 'Best of 5 Rows', rows: 5, numbers: 16,
+    id: 'best-of-5', label: 'Best of 5 Rows',
+    desc: 'Expanded board with 5 rows; win 3 rows to take the game.',
+    rows: 5, numbers: 16,
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: false, hiddenMaster: false
   },
   'hidden-master': {
-    id: 'hidden-master', label: 'Hidden Master Key', rows: 3, numbers: 10,
+    id: 'hidden-master', label: 'Hidden Master Key',
+    desc: 'Master Key is hidden after placement and revealed only at scoring.',
+    rows: 3, numbers: 10,
     masters: [{ id: 'mk', label: 'HIDDEN MASTER KEY' }],
     keyLock: false, draft: false, hiddenMaster: true
   }
 };
 
+let selectedVariantId = 'classic';
 let currentVariant = VARIANTS.classic;
 let board = {};
 let usedNumbers = new Set();
@@ -720,6 +763,8 @@ function init() {
   buildGrid();
   buildMasterKeyArea();
   buildPicker();
+  updateVariantButton();
+  renderVariantChooser();
   renderHelpContent();
   updateTurnBar();
   updateParityHint();
@@ -1404,15 +1449,60 @@ function hideHelp() {
   document.getElementById('helpOverlay').classList.remove('show');
 }
 
-function showMenu() {
-  hideEndgame();
+function updateVariantButton() {
+  const btn = document.getElementById('menuVariantBtn');
+  if (!btn) return;
+  const v = VARIANTS[selectedVariantId] || VARIANTS.classic;
+  btn.textContent = `VARIANT: ${v.label.toUpperCase()}`;
+}
+
+function renderVariantChooser() {
+  const list = document.getElementById('variantList');
+  if (!list) return;
+  list.innerHTML = '';
+
+  for (const v of Object.values(VARIANTS)) {
+    const card = document.createElement('div');
+    card.className = `variant-card${v.id === selectedVariantId ? ' active' : ''}`;
+    card.onclick = () => {
+      selectedVariantId = v.id;
+      renderVariantChooser();
+      updateVariantButton();
+    };
+
+    card.innerHTML = `<div class="variant-card-title">${v.label}</div><div class="variant-card-desc">${v.desc}</div>`;
+    list.appendChild(card);
+  }
+}
+
+function showVariantChooser() {
+  document.getElementById('variantScreen').classList.add('show');
+  document.getElementById('menuVariantBtn').style.display = 'none';
+  document.getElementById('menuVsBtn').style.display = 'none';
+  document.getElementById('menuAIBtn').style.display = 'none';
   document.getElementById('difficultyPanel').style.display = 'none';
   document.getElementById('turnOrderPanel').style.display = 'none';
+  renderVariantChooser();
+}
+
+function hideVariantChooser() {
+  document.getElementById('variantScreen').classList.remove('show');
+  document.getElementById('menuVariantBtn').style.display = '';
+  document.getElementById('menuVsBtn').style.display = '';
   document.getElementById('menuAIBtn').style.display = '';
+  document.getElementById('difficultyPanel').style.display = 'none';
+  document.getElementById('turnOrderPanel').style.display = 'none';
+}
+
+function showMenu() {
+  hideEndgame();
+  hideVariantChooser();
+  updateVariantButton();
   document.getElementById('menuOverlay').classList.add('show');
 }
 
 function showDifficulty() {
+  hideVariantChooser();
   document.getElementById('difficultyPanel').style.display = 'flex';
   document.getElementById('menuAIBtn').style.display = 'none';
 }
@@ -1424,7 +1514,6 @@ function selectDifficulty(diff) {
 }
 
 function startGame(ai, turnOrder) {
-  const selectedVariantId = document.getElementById('variantSelect').value;
   currentVariant = VARIANTS[selectedVariantId] || VARIANTS.classic;
 
   vsAI = ai;
