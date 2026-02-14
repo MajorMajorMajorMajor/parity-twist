@@ -593,21 +593,24 @@ h1 {
   border: 2px solid #2d8c45;
   background: linear-gradient(135deg, #56d47b, #2dbd5c);
   color: #032910;
-  font-size: 0.74rem;
-  letter-spacing: 0.6px;
+  font-size: 1.05rem;
 }
 .menu-btn-variant-random:hover { border-color: #8af4a9; }
 .menu-variant-rule {
   width: min(92vw, 360px);
-  display: none;
   margin-top: 6px;
   padding: 12px;
+  min-height: 88px;
   border-radius: 12px;
-  border: 2px solid #2a2a4a;
-  background: linear-gradient(160deg, rgba(26, 26, 46, 0.96), rgba(22, 33, 62, 0.96));
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
-.menu-variant-rule.show { display: block; }
+.menu-variant-rule.show {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
 .menu-variant-rule-title {
   font-size: 0.74rem;
   color: var(--gold);
@@ -694,8 +697,8 @@ h1 {
       <div class="diff-label">SELECTED VARIANT</div>
       <div class="variant-selector-row">
         <div class="variant-display" id="selectedVariantDisplay" onclick="showVariantChooser()">CLASSIC</div>
-        <button class="btn menu-btn-variant-open" id="menuVariantBtn" onclick="showVariantChooser()" aria-label="Choose variant">↻</button>
-        <button class="btn menu-btn-variant-random" id="menuVariantRandomBtn" onclick="pickRandomVariant()" aria-label="Random variant">RND</button>
+        <button class="btn menu-btn-variant-open" id="menuVariantBtn" onclick="showVariantChooser()" aria-label="Choose variant">⇄</button>
+        <button class="btn menu-btn-variant-random" id="menuVariantRandomBtn" onclick="pickRandomVariant()" aria-label="Random variant">🎲</button>
       </div>
     </div>
     <button class="btn menu-btn menu-btn-vs" id="menuVsBtn" onclick="startGame(false)">VS PLAYER</button>
