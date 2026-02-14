@@ -1709,7 +1709,7 @@ function updateVariantButton() {
   btn.textContent = `VARIANT: ${v.label.toUpperCase()}`;
 }
 
-let expandedVariantId = null;
+let tappedVariantId = null;
 
 function renderVariantChooser() {
   const list = document.getElementById('variantList');
@@ -1717,21 +1717,19 @@ function renderVariantChooser() {
   list.innerHTML = '';
 
   for (const v of Object.values(VARIANTS)) {
-    const isExpanded = v.id === expandedVariantId;
+    const isTapped = v.id === tappedVariantId;
     const isSelected = v.id === selectedVariantId;
     const card = document.createElement('div');
     card.className = `variant-card${isSelected ? ' active' : ''}`;
     card.onclick = () => {
-      expandedVariantId = expandedVariantId === v.id ? null : v.id;
+      tappedVariantId = tappedVariantId === v.id ? null : v.id;
       renderVariantChooser();
     };
 
     let html = `<div class="variant-card-title">${v.label}${isSelected ? ' ✓' : ''}</div>`;
-    if (isExpanded) {
-      html += `<div class="variant-card-desc">${v.desc}</div>`;
-      if (!isSelected) {
-        html += `<button class="variant-select-btn" onclick="event.stopPropagation(); confirmVariant('${v.id}')">SELECT</button>`;
-      }
+    html += `<div class="variant-card-desc">${v.desc}</div>`;
+    if (isTapped && !isSelected) {
+      html += `<button class="variant-select-btn" onclick="event.stopPropagation(); confirmVariant('${v.id}')">SELECT</button>`;
     }
     card.innerHTML = html;
     list.appendChild(card);
@@ -1745,7 +1743,7 @@ function confirmVariant(id) {
 }
 
 function showVariantChooser() {
-  expandedVariantId = null;
+  tappedVariantId = null;
   document.getElementById('variantScreen').classList.add('show');
   document.getElementById('menuVariantBtn').style.display = 'none';
   document.getElementById('menuVsBtn').style.display = 'none';
