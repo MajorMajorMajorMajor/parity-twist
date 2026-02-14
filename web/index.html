@@ -160,6 +160,10 @@ h1 {
   opacity: 0.55;
   box-shadow: inset 0 0 0 2px rgba(255, 215, 0, 0.35);
 }
+.cell.last-move {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
 
 .cell.col-0 { color: var(--p1); }
 .cell.col-1 { color: var(--p2); }
@@ -223,6 +227,9 @@ h1 {
 }
 .master-key-cell.filled { cursor: default; }
 .master-key-cell.filled:active { transform: none; }
+.master-key-cell.last-move {
+  box-shadow: inset 0 0 0 2px var(--gold), 0 0 12px rgba(255, 215, 0, 0.4);
+}
 
 /* Number picker */
 .picker-label {
@@ -941,6 +948,8 @@ function doPlaceNumber(cellId, n) {
   usedNumbers.add(n);
   numberPlacements[n] = { cell: cellId, player: currentPlayer };
 
+  document.querySelectorAll('.cell.last-move, .master-key-cell.last-move').forEach(el => el.classList.remove('last-move'));
+
   if (currentVariant.draft) {
     const hand = playerHands[currentPlayer];
     const idx = hand.indexOf(n);
@@ -952,7 +961,7 @@ function doPlaceNumber(cellId, n) {
     const hiddenMk = currentVariant.hiddenMaster && cellId === 'mk' && !gameOver;
     el.textContent = hiddenMk ? '?' : n;
     el.classList.remove('selected');
-    el.classList.add('filled', 'cell-pop');
+    el.classList.add('filled', 'cell-pop', 'last-move');
   }
 
   if (!currentVariant.draft) {
