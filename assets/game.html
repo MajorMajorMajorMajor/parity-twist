@@ -539,11 +539,43 @@ h1 {
   text-align: center;
 }
 .diff-btn:hover { border-color: var(--p2); }
-.menu-btn-variant {
-  background: var(--surface);
-  color: var(--text);
-  border: 2px solid #2a2a4a;
+.variant-selector-block {
+  width: 100%;
+  margin-bottom: 2px;
 }
+.variant-selector-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.variant-display {
+  flex: 1;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 2px solid #2a2a4a;
+  background: var(--surface);
+  color: var(--gold);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+}
+.menu-btn-variant-open {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 10px;
+  border: 2px solid #ad7e00;
+  background: linear-gradient(135deg, #ffd95a, #ffbf00);
+  color: #352600;
+  font-size: 1rem;
+  font-weight: 900;
+}
+.menu-btn-variant-open:hover { border-color: #ffe08a; }
 .variant-screen {
   width: min(92vw, 360px);
   max-height: 72vh;
@@ -609,7 +641,13 @@ h1 {
   <div class="menu-card">
     <div class="menu-title">PARITY TWIST</div>
     <div class="menu-sub">STRATEGY GAME</div>
-    <button class="btn menu-btn menu-btn-variant" id="menuVariantBtn" onclick="showVariantChooser()">VARIANT: CLASSIC</button>
+    <div class="variant-selector-block" id="variantSelectorBlock">
+      <div class="diff-label">SELECTED VARIANT</div>
+      <div class="variant-selector-row">
+        <div class="variant-display" id="selectedVariantDisplay">CLASSIC</div>
+        <button class="btn menu-btn-variant-open" id="menuVariantBtn" onclick="showVariantChooser()" aria-label="Choose variant">✦</button>
+      </div>
+    </div>
     <button class="btn menu-btn menu-btn-vs" id="menuVsBtn" onclick="startGame(false)">VS PLAYER</button>
     <button class="btn menu-btn menu-btn-ai" id="menuAIBtn" onclick="showDifficulty()">VS AI</button>
     <div class="difficulty-panel" id="difficultyPanel" style="display:none;">
@@ -1703,10 +1741,9 @@ function hideHelp() {
 }
 
 function updateVariantButton() {
-  const btn = document.getElementById('menuVariantBtn');
-  if (!btn) return;
   const v = VARIANTS[selectedVariantId] || VARIANTS.classic;
-  btn.textContent = `VARIANT: ${v.label.toUpperCase()}`;
+  const display = document.getElementById('selectedVariantDisplay');
+  if (display) display.textContent = v.label.toUpperCase();
 }
 
 let tappedVariantId = null;
@@ -1745,7 +1782,7 @@ function confirmVariant(id) {
 function showVariantChooser() {
   tappedVariantId = null;
   document.getElementById('variantScreen').classList.add('show');
-  document.getElementById('menuVariantBtn').style.display = 'none';
+  document.getElementById('variantSelectorBlock').style.display = 'none';
   document.getElementById('menuVsBtn').style.display = 'none';
   document.getElementById('menuAIBtn').style.display = 'none';
   document.getElementById('difficultyPanel').style.display = 'none';
@@ -1755,7 +1792,7 @@ function showVariantChooser() {
 
 function hideVariantChooser() {
   document.getElementById('variantScreen').classList.remove('show');
-  document.getElementById('menuVariantBtn').style.display = '';
+  document.getElementById('variantSelectorBlock').style.display = '';
   document.getElementById('menuVsBtn').style.display = '';
   document.getElementById('menuAIBtn').style.display = '';
   document.getElementById('difficultyPanel').style.display = 'none';
