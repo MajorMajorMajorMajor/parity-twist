@@ -594,6 +594,40 @@ h1 {
   cursor: pointer;
 }
 
+/* Variant display bar */
+.variant-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.variant-display-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--key-light);
+  text-transform: uppercase;
+}
+.variant-change-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gold);
+  color: var(--bg);
+  font-size: 0.85rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+  flex-shrink: 0;
+}
+.variant-change-btn:active { transform: scale(0.9); }
+
 /* AI thinking pulse */
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -635,6 +669,11 @@ h1 {
 
 <h1>PARITY TWIST</h1>
 <div class="subtitle" id="subtitleText">STRATEGY GAME</div>
+
+<div class="variant-display" id="variantDisplay">
+  <span class="variant-display-name" id="variantDisplayName">CLASSIC</span>
+  <button class="variant-change-btn" onclick="goToVariantScreen()" title="Change variant">&#9998;</button>
+</div>
 
 <!-- Scoreboard (shown at end of game, replaces turn bar) -->
 <div class="scoreboard" id="scoreboard">
@@ -1501,6 +1540,7 @@ function showEndgame(p1Score, p2Score, rowResults) {
   breakdown.innerHTML = html;
 
   document.getElementById('turnBar').style.display = 'none';
+  document.getElementById('variantDisplay').style.display = 'none';
   document.getElementById('scoreboard').classList.add('show');
   document.getElementById('boardContainer').classList.add('endgame');
   document.getElementById('parityHint').style.display = 'none';
@@ -1513,6 +1553,7 @@ function showEndgame(p1Score, p2Score, rowResults) {
 
 function hideEndgame() {
   document.getElementById('turnBar').style.display = '';
+  document.getElementById('variantDisplay').style.display = '';
   document.getElementById('scoreboard').classList.remove('show');
   document.getElementById('boardContainer').classList.remove('endgame');
   document.getElementById('parityHint').style.display = '';
@@ -1762,6 +1803,13 @@ function hideVariantChooser() {
   document.getElementById('turnOrderPanel').style.display = 'none';
 }
 
+function goToVariantScreen() {
+  hideEndgame();
+  updateVariantButton();
+  document.getElementById('menuOverlay').classList.add('show');
+  showVariantChooser();
+}
+
 function showMenu() {
   hideEndgame();
   hideVariantChooser();
@@ -1799,6 +1847,7 @@ function startGame(ai, turnOrder) {
     ? `VS AI (${aiNote}) • ${currentVariant.label.toUpperCase()}`
     : `${currentVariant.label.toUpperCase()} • 2-PLAYER`;
 
+  document.getElementById('variantDisplayName').textContent = currentVariant.label.toUpperCase();
   renderHelpContent();
   newGame();
 }
