@@ -129,7 +129,7 @@ h1 {
 .grid {
   display: grid;
   grid-template-columns: repeat(3, 90px);
-  grid-template-rows: repeat(3, 72px);
+  grid-template-rows: repeat(var(--rows, 3), 72px);
   gap: 0;
   border: 2px solid #2a2a4a;
   border-radius: 10px;
@@ -156,6 +156,10 @@ h1 {
 }
 .cell.filled { cursor: default; }
 .cell.filled:active { transform: none; }
+.cell.locked {
+  opacity: 0.55;
+  box-shadow: inset 0 0 0 2px rgba(255, 215, 0, 0.35);
+}
 
 .cell.col-0 { color: var(--p1); }
 .cell.col-1 { color: var(--p2); }
@@ -179,6 +183,16 @@ h1 {
   flex-direction: column;
   align-items: center;
   margin-top: 6px;
+}
+.master-key-slots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.master-key-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .master-key-label {
   font-size: 0.7rem;
@@ -514,6 +528,15 @@ h1 {
   text-align: center;
 }
 .diff-btn:hover { border-color: var(--p2); }
+.menu-select {
+  width: 220px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 2px solid #2a2a4a;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
 
 /* AI thinking pulse */
 @keyframes pulse {
@@ -530,6 +553,15 @@ h1 {
   <div class="menu-card">
     <div class="menu-title">PARITY TWIST</div>
     <div class="menu-sub">STRATEGY GAME</div>
+    <div class="diff-label">VARIANT</div>
+    <select id="variantSelect" class="menu-select">
+      <option value="classic">Classic</option>
+      <option value="dual-master">Dual Master Keys</option>
+      <option value="key-lock">Key Locking</option>
+      <option value="draft-place">Draft + Place</option>
+      <option value="best-of-5">Best of 5 Rows</option>
+      <option value="hidden-master">Hidden Master Key</option>
+    </select>
     <button class="btn menu-btn menu-btn-vs" onclick="startGame(false)">VS PLAYER</button>
     <button class="btn menu-btn menu-btn-ai" id="menuAIBtn" onclick="showDifficulty()">VS AI</button>
     <div class="difficulty-panel" id="difficultyPanel" style="display:none;">
@@ -570,17 +602,10 @@ h1 {
 
   <div class="board-with-indicators">
     <div class="grid" id="grid"></div>
-    <div class="row-indicators" id="rowIndicators">
-      <div class="row-ind-item" id="rowInd0"></div>
-      <div class="row-ind-item" id="rowInd1"></div>
-      <div class="row-ind-item" id="rowInd2"></div>
-    </div>
+    <div class="row-indicators" id="rowIndicators"></div>
   </div>
 
-  <div class="master-key-area">
-    <div class="master-key-label">MASTER KEY</div>
-    <div class="master-key-cell" id="masterKey" onclick="selectCell('mk')"></div>
-  </div>
+  <div class="master-key-area" id="masterKeyArea"></div>
 </div>
 
 <div class="parity-hint" id="parityHint">
@@ -633,26 +658,86 @@ h1 {
 </div>
 
 <script>
-// Game state
-let board = {}; // 'r0c0' ... 'r2c2', 'mk'
+const VARIANTS = {
+  classic: {
+    id: 'classic', label: 'Classic', rows: 3, numbers: 10,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false
+  },
+  'dual-master': {
+    id: 'dual-master', label: 'Dual Master Keys', rows: 3, numbers: 11,
+    masters: [{ id: 'mkOdd', label: 'MASTER ODD' }, { id: 'mkEven', label: 'MASTER EVEN' }],
+    keyLock: false, draft: false, hiddenMaster: false
+  },
+  'key-lock': {
+    id: 'key-lock', label: 'Key Locking', rows: 3, numbers: 10,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: true, draft: false, hiddenMaster: false
+  },
+  'draft-place': {
+    id: 'draft-place', label: 'Draft + Place', rows: 3, numbers: 10,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: true, hiddenMaster: false
+  },
+  'best-of-5': {
+    id: 'best-of-5', label: 'Best of 5 Rows', rows: 5, numbers: 16,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false
+  },
+  'hidden-master': {
+    id: 'hidden-master', label: 'Hidden Master Key', rows: 3, numbers: 10,
+    masters: [{ id: 'mk', label: 'HIDDEN MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: true
+  }
+};
+
+let currentVariant = VARIANTS.classic;
+let board = {};
 let usedNumbers = new Set();
 let selectedCell = null;
-let currentPlayer = 1; // 1 or 2
+let currentPlayer = 1;
 let turnCount = 0;
 let gameOver = false;
-let numberPlacements = {}; // number -> {cell, player}
+let numberPlacements = {};
+let rowLocks = [];
+
+// Draft mode state
+let playerHands = { 1: [], 2: [] };
+let marketNumbers = [];
+let draftedThisTurn = false;
 
 // AI state
 let vsAI = false;
 let aiDifficulty = 'medium';
-let aiPlayer = 2; // which player number the AI controls (1 or 2)
+let aiPlayer = 2;
 let aiThinking = false;
+let selectedDiff = 'medium';
 
-// All cell IDs
-const ALL_CELLS = ['r0c0','r0c1','r0c2','r1c0','r1c1','r1c2','r2c0','r2c1','r2c2','mk'];
+function getBoardCells() {
+  const cells = [];
+  for (let r = 0; r < currentVariant.rows; r++) {
+    for (let c = 0; c < 3; c++) cells.push(`r${r}c${c}`);
+  }
+  return cells;
+}
+
+function getAllCells() {
+  return [...getBoardCells(), ...currentVariant.masters.map(m => m.id)];
+}
+
+function getRemainingNumbers() {
+  const nums = [];
+  for (let n = 1; n <= currentVariant.numbers; n++) if (!usedNumbers.has(n)) nums.push(n);
+  return nums;
+}
+
+function randPick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 function init() {
   buildGrid();
+  buildMasterKeyArea();
   buildPicker();
   updateTurnBar();
   updateParityHint();
@@ -660,8 +745,10 @@ function init() {
 
 function buildGrid() {
   const grid = document.getElementById('grid');
+  grid.style.setProperty('--rows', String(currentVariant.rows));
   grid.innerHTML = '';
-  for (let r = 0; r < 3; r++) {
+
+  for (let r = 0; r < currentVariant.rows; r++) {
     for (let c = 0; c < 3; c++) {
       const cell = document.createElement('div');
       cell.className = `cell col-${c}`;
@@ -672,12 +759,55 @@ function buildGrid() {
       grid.appendChild(cell);
     }
   }
+
+  const indicators = document.getElementById('rowIndicators');
+  indicators.innerHTML = '';
+  for (let r = 0; r < currentVariant.rows; r++) {
+    const ind = document.createElement('div');
+    ind.className = 'row-ind-item';
+    ind.id = `rowInd${r}`;
+    indicators.appendChild(ind);
+  }
+}
+
+function buildMasterKeyArea() {
+  const area = document.getElementById('masterKeyArea');
+  area.innerHTML = '';
+
+  const slots = document.createElement('div');
+  slots.className = 'master-key-slots';
+
+  for (const mk of currentVariant.masters) {
+    const slot = document.createElement('div');
+    slot.className = 'master-key-slot';
+
+    const label = document.createElement('div');
+    label.className = 'master-key-label';
+    label.textContent = mk.label;
+
+    const cell = document.createElement('div');
+    cell.className = 'master-key-cell';
+    cell.id = mk.id;
+    cell.onclick = () => selectCell(mk.id);
+
+    slot.appendChild(label);
+    slot.appendChild(cell);
+    slots.appendChild(slot);
+  }
+
+  area.appendChild(slots);
 }
 
 function buildPicker() {
   const picker = document.getElementById('numberPicker');
   picker.innerHTML = '';
-  for (let n = 1; n <= 10; n++) {
+
+  if (currentVariant.draft) {
+    renderDraftPicker();
+    return;
+  }
+
+  for (let n = 1; n <= currentVariant.numbers; n++) {
     const btn = document.createElement('div');
     btn.className = 'num-btn';
     btn.id = `num-${n}`;
@@ -687,31 +817,90 @@ function buildPicker() {
   }
 }
 
-function selectCell(id) {
-  if (gameOver) return;
-  if (aiThinking) return;
-  if (board[id] !== undefined) return; // already filled
+function renderDraftPicker() {
+  const picker = document.getElementById('numberPicker');
+  picker.innerHTML = '';
 
-  // Deselect previous
-  document.querySelectorAll('.cell.selected, .master-key-cell.selected').forEach(el => {
-    el.classList.remove('selected');
-  });
-
-  selectedCell = id;
-
-  if (id === 'mk') {
-    document.getElementById('masterKey').classList.add('selected');
-  } else {
-    document.getElementById(id).classList.add('selected');
+  if (!draftedThisTurn) {
+    document.getElementById('pickerLabel').textContent = `DRAFT FROM MARKET (${marketNumbers.join(', ')})`;
+    for (const n of marketNumbers) {
+      const btn = document.createElement('div');
+      btn.className = 'num-btn';
+      btn.textContent = n;
+      btn.onclick = () => draftNumber(n);
+      picker.appendChild(btn);
+    }
+    return;
   }
 
+  document.getElementById('pickerLabel').textContent = `PLACE FROM HAND (P${currentPlayer}: ${playerHands[currentPlayer].join(', ')})`;
+  for (const n of playerHands[currentPlayer]) {
+    const btn = document.createElement('div');
+    btn.className = 'num-btn';
+    btn.textContent = n;
+    btn.onclick = () => placeNumber(n);
+    picker.appendChild(btn);
+  }
+}
+
+function isMasterCell(id) {
+  return currentVariant.masters.some(m => m.id === id);
+}
+
+function getCellEl(id) {
+  return document.getElementById(id);
+}
+
+function isCellLocked(id) {
+  if (!currentVariant.keyLock) return false;
+  if (!id.startsWith('r')) return false;
+  const row = parseInt(id[1], 10);
+  const col = parseInt(id[3], 10);
+  if (col === 2) return false;
+  return rowLocks[row] > 0;
+}
+
+function selectCell(id) {
+  if (gameOver || aiThinking) return;
+  if (board[id] !== undefined) return;
+  if (isCellLocked(id)) {
+    document.getElementById('parityHint').textContent = 'That row is temporarily locked.';
+    return;
+  }
+
+  document.querySelectorAll('.cell.selected, .master-key-cell.selected').forEach(el => el.classList.remove('selected'));
+  selectedCell = id;
+  const el = getCellEl(id);
+  if (el) el.classList.add('selected');
+  updateParityHint();
+}
+
+function draftNumber(n) {
+  if (!currentVariant.draft || gameOver || aiThinking) return;
+  if (draftedThisTurn) return;
+  if (!marketNumbers.includes(n)) return;
+
+  marketNumbers = marketNumbers.filter(x => x !== n);
+  playerHands[currentPlayer].push(n);
+  draftedThisTurn = true;
+  refillMarket();
+  renderDraftPicker();
   updateParityHint();
 }
 
 function placeNumber(n) {
-  if (gameOver) return;
-  if (aiThinking) return;
-  if (usedNumbers.has(n)) return;
+  if (gameOver || aiThinking) return;
+
+  if (currentVariant.draft) {
+    if (!draftedThisTurn) {
+      document.getElementById('parityHint').textContent = 'Draft from market first.';
+      return;
+    }
+    if (!playerHands[currentPlayer].includes(n)) return;
+  } else {
+    if (usedNumbers.has(n)) return;
+  }
+
   if (selectedCell === null) {
     document.getElementById('parityHint').textContent = 'Tap a cell first!';
     return;
@@ -721,50 +910,79 @@ function placeNumber(n) {
 }
 
 function doPlaceNumber(cellId, n) {
-  // Place the number
   board[cellId] = n;
   usedNumbers.add(n);
   numberPlacements[n] = { cell: cellId, player: currentPlayer };
 
-  // Update cell display
-  const el = cellId === 'mk'
-    ? document.getElementById('masterKey')
-    : document.getElementById(cellId);
+  if (currentVariant.draft) {
+    const hand = playerHands[currentPlayer];
+    const idx = hand.indexOf(n);
+    if (idx >= 0) hand.splice(idx, 1);
+  }
 
-  el.textContent = n;
-  el.classList.remove('selected');
-  el.classList.add('filled', 'cell-pop');
+  const el = getCellEl(cellId);
+  if (el) {
+    const hiddenMk = currentVariant.hiddenMaster && cellId === 'mk' && !gameOver;
+    el.textContent = hiddenMk ? '?' : n;
+    el.classList.remove('selected');
+    el.classList.add('filled', 'cell-pop');
+  }
 
-  // Update number picker
-  const numBtn = document.getElementById(`num-${n}`);
-  numBtn.classList.add('used');
-  if (cellId === 'mk') {
-    numBtn.classList.add('mk-placed');
-  } else {
-    const col = parseInt(cellId[3]);
-    if (col === 0) numBtn.classList.add('p1-placed');
-    else if (col === 1) numBtn.classList.add('p2-placed');
-    else numBtn.classList.add('key-placed');
+  if (!currentVariant.draft) {
+    const numBtn = document.getElementById(`num-${n}`);
+    if (numBtn) {
+      numBtn.classList.add('used');
+      if (isMasterCell(cellId)) numBtn.classList.add('mk-placed');
+      else {
+        const col = parseInt(cellId[3], 10);
+        if (col === 0) numBtn.classList.add('p1-placed');
+        else if (col === 1) numBtn.classList.add('p2-placed');
+        else numBtn.classList.add('key-placed');
+      }
+    }
+  }
+
+  if (currentVariant.keyLock && cellId.startsWith('r') && parseInt(cellId[3], 10) === 2) {
+    const row = parseInt(cellId[1], 10);
+    rowLocks[row] = 2;
   }
 
   selectedCell = null;
   turnCount++;
 
-  // Check if game is over (all 10 cells filled)
-  if (turnCount >= 10) {
+  if (turnCount >= getAllCells().length) {
     gameOver = true;
-    setTimeout(resolveGame, 500);
+    setTimeout(resolveGame, 350);
   } else {
     currentPlayer = currentPlayer === 1 ? 2 : 1;
+    draftedThisTurn = false;
+    decrementLocks();
+    refreshLockedCells();
     updateTurnBar();
 
-    // Trigger AI move if applicable
-    if (vsAI && currentPlayer === aiPlayer && !gameOver) {
-      triggerAIMove();
-    }
+    if (currentVariant.draft) renderDraftPicker();
+
+    if (vsAI && currentPlayer === aiPlayer && !gameOver) triggerAIMove();
   }
 
   updateParityHint();
+}
+
+function decrementLocks() {
+  if (!currentVariant.keyLock) return;
+  rowLocks = rowLocks.map(v => Math.max(0, v - 1));
+}
+
+function refreshLockedCells() {
+  if (!currentVariant.keyLock) return;
+  for (let r = 0; r < currentVariant.rows; r++) {
+    for (let c = 0; c < 2; c++) {
+      const el = document.getElementById(`r${r}c${c}`);
+      if (!el) continue;
+      if (rowLocks[r] > 0 && board[`r${r}c${c}`] === undefined) el.classList.add('locked');
+      else el.classList.remove('locked');
+    }
+  }
 }
 
 function triggerAIMove() {
@@ -772,82 +990,190 @@ function triggerAIMove() {
   updateTurnBar();
 
   setTimeout(() => {
-    const move = getAIMove();
     aiThinking = false;
+
+    if (currentVariant.draft) {
+      const d = randPick(marketNumbers);
+      draftNumber(d);
+      const cells = getLegalEmptyCells();
+      const hand = playerHands[currentPlayer];
+      if (cells.length && hand.length) doPlaceNumber(randPick(cells), randPick(hand));
+      return;
+    }
+
+    const move = getAIMove();
     doPlaceNumber(move.cell, move.num);
-  }, 400);
+  }, 350);
 }
 
-function updateTurnBar() {
-  const bar = document.getElementById('turnBar');
-  const text = document.getElementById('turnText');
-  bar.className = `turn-bar p${currentPlayer}-turn`;
-
-  if (aiThinking) {
-    text.textContent = 'AI is thinking...';
-    bar.classList.add('ai-thinking');
-  } else if (vsAI) {
-    text.textContent = currentPlayer === aiPlayer ? "AI's Turn" : "Your Turn";
-    bar.classList.remove('ai-thinking');
-  } else {
-    text.textContent = `Player ${currentPlayer}'s Turn`;
-    bar.classList.remove('ai-thinking');
-  }
+function getLegalEmptyCells() {
+  return getAllCells().filter(c => board[c] === undefined && !isCellLocked(c));
 }
 
-function updateParityHint() {
-  const hint = document.getElementById('parityHint');
+function getAIMove() {
+  if (currentVariant.id !== 'classic') return getRandomMove();
 
-  if (gameOver) {
-    hint.style.display = 'none';
-    return;
+  if (aiDifficulty === 'easy') return getRandomMove();
+  if (aiDifficulty === 'medium') return getBestMove(2);
+  const movesLeft = getAllCells().filter(c => board[c] === undefined).length;
+  const depth = movesLeft <= 6 ? movesLeft : 3;
+  return getBestMove(depth);
+}
+
+function getRandomMove() {
+  const emptyCells = getLegalEmptyCells();
+  const availNums = getRemainingNumbers();
+  return { cell: randPick(emptyCells), num: randPick(availNums) };
+}
+
+function getBestMove(maxDepth) {
+  const emptyCells = getLegalEmptyCells();
+  const availNums = getRemainingNumbers();
+  const aiMaximizes = (aiPlayer === 2);
+  let bestScore = aiMaximizes ? -Infinity : Infinity;
+  let bestMove = null;
+
+  for (const cell of emptyCells) {
+    for (const num of availNums) {
+      board[cell] = num;
+      usedNumbers.add(num);
+      const score = minimax(maxDepth - 1, !aiMaximizes, -Infinity, Infinity);
+      board[cell] = undefined;
+      usedNumbers.delete(num);
+
+      if (aiMaximizes ? score > bestScore : score < bestScore) {
+        bestScore = score;
+        bestMove = { cell, num };
+      }
+    }
   }
 
-  if (board['mk'] !== undefined) {
-    const mkVal = board['mk'];
-    const mkParity = mkVal % 2 === 0 ? 'even' : 'odd';
-    hint.innerHTML = `Master Key is <span class="${mkParity === 'even' ? 'even' : 'odd'}">${mkVal} (${mkParity})</span>. ` +
-      `Key matches &rarr; <span class="low">lower wins</span>. Key differs &rarr; <span class="high">higher wins</span>.`;
-  } else if (selectedCell === 'mk') {
-    hint.textContent = 'Place a number in the Master Key cell.';
-  } else if (selectedCell) {
-    const col = parseInt(selectedCell[3]);
-    const colName = ['P1', 'P2', 'Key'][col];
-    hint.textContent = `Placing in ${colName} column. Choose a number.`;
-  } else {
-    hint.textContent = 'Tap a cell, then choose a number to place.';
+  return bestMove || getRandomMove();
+}
+
+function minimax(depth, isMaximizing, alpha, beta) {
+  const movesLeft = getAllCells().filter(c => board[c] === undefined).length;
+  if (movesLeft === 0) return evaluateTerminalClassic();
+  if (depth === 0) return evaluateHeuristicClassic();
+
+  const emptyCells = getLegalEmptyCells();
+  const availNums = getRemainingNumbers();
+
+  if (isMaximizing) {
+    let best = -Infinity;
+    for (const cell of emptyCells) {
+      for (const num of availNums) {
+        board[cell] = num;
+        usedNumbers.add(num);
+        const score = minimax(depth - 1, false, alpha, beta);
+        board[cell] = undefined;
+        usedNumbers.delete(num);
+        best = Math.max(best, score);
+        alpha = Math.max(alpha, best);
+        if (beta <= alpha) return best;
+      }
+    }
+    return best;
   }
+
+  let best = Infinity;
+  for (const cell of emptyCells) {
+    for (const num of availNums) {
+      board[cell] = num;
+      usedNumbers.add(num);
+      const score = minimax(depth - 1, true, alpha, beta);
+      board[cell] = undefined;
+      usedNumbers.delete(num);
+      best = Math.min(best, score);
+      beta = Math.min(beta, best);
+      if (beta <= alpha) return best;
+    }
+  }
+  return best;
+}
+
+function evaluateTerminalClassic() {
+  const mk = board['mk'];
+  const mkEven = mk % 2 === 0;
+  let p2Rows = 0;
+  for (let r = 0; r < 3; r++) {
+    const p1 = board[`r${r}c0`];
+    const p2 = board[`r${r}c1`];
+    const key = board[`r${r}c2`];
+    const match = mkEven === (key % 2 === 0);
+    const winner = match ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
+    p2Rows += winner === 2 ? 1 : -1;
+  }
+  return p2Rows;
+}
+
+function evaluateHeuristicClassic() {
+  const mk = board['mk'];
+  let score = 0;
+
+  for (let r = 0; r < 3; r++) {
+    const p1 = board[`r${r}c0`];
+    const p2 = board[`r${r}c1`];
+    const key = board[`r${r}c2`];
+
+    if (p1 != null && p2 != null && key != null && mk != null) {
+      const match = (mk % 2 === 0) === (key % 2 === 0);
+      const winner = match ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
+      score += winner === 2 ? 1 : -1;
+    } else if (p1 != null && p2 != null) {
+      score += (p2 > p1 ? 0.12 : -0.12);
+    } else if (p1 != null || p2 != null) {
+      const val = p1 != null ? p1 : p2;
+      const isP2 = p2 != null;
+      const edge = (val >= 7 || val <= 3) ? 0.06 : 0;
+      score += isP2 ? edge : -edge;
+    }
+  }
+
+  if (mk != null) score += 0.03;
+  return score;
+}
+
+function getRowRule(r) {
+  const keyVal = board[`r${r}c2`];
+  if (currentVariant.id === 'dual-master') {
+    const mkId = keyVal % 2 === 1 ? 'mkOdd' : 'mkEven';
+    const mkVal = board[mkId];
+    const parityMatch = (keyVal % 2) === (mkVal % 2);
+    return { mkVal, mkLabel: mkId === 'mkOdd' ? 'MO' : 'ME', parityMatch };
+  }
+
+  const mkVal = board['mk'];
+  const parityMatch = (keyVal % 2) === (mkVal % 2);
+  return { mkVal, mkLabel: 'MK', parityMatch };
 }
 
 function resolveGame() {
-  const mk = board['mk'];
-  const mkEven = mk % 2 === 0;
+  if (currentVariant.hiddenMaster) {
+    const mkEl = document.getElementById('mk');
+    if (mkEl) mkEl.textContent = board['mk'];
+  }
+
   let p1Wins = 0, p2Wins = 0;
   const rowResults = [];
 
-  for (let r = 0; r < 3; r++) {
+  for (let r = 0; r < currentVariant.rows; r++) {
     const p1Val = board[`r${r}c0`];
     const p2Val = board[`r${r}c1`];
     const keyVal = board[`r${r}c2`];
-    const keyEven = keyVal % 2 === 0;
-    const parityMatch = mkEven === keyEven;
+    const rr = getRowRule(r);
 
-    let winner;
-    if (parityMatch) {
-      winner = p1Val < p2Val ? 1 : 2;
-    } else {
-      winner = p1Val > p2Val ? 1 : 2;
-    }
+    const winner = rr.parityMatch ? (p1Val < p2Val ? 1 : 2) : (p1Val > p2Val ? 1 : 2);
+    if (winner === 1) p1Wins++; else p2Wins++;
 
     rowResults.push({
-      row: r, p1Val, p2Val, keyVal, mk, parityMatch, winner,
-      rule: parityMatch ? 'lower wins' : 'higher wins'
+      row: r, p1Val, p2Val, keyVal,
+      mk: rr.mkVal, mkLabel: rr.mkLabel,
+      parityMatch: rr.parityMatch,
+      winner,
+      rule: rr.parityMatch ? 'lower wins' : 'higher wins'
     });
 
-    if (winner === 1) p1Wins++;
-    else p2Wins++;
-
-    // Highlight cells
     const p1Cell = document.getElementById(`r${r}c0`);
     const p2Cell = document.getElementById(`r${r}c1`);
     if (winner === 1) {
@@ -858,52 +1184,48 @@ function resolveGame() {
       p1Cell.classList.add('row-lose');
     }
 
-    // Row indicator
     const ind = document.getElementById(`rowInd${r}`);
-    ind.textContent = vsAI ? (winner === aiPlayer ? 'AI' : 'YOU') : `P${winner}`;
-    ind.className = `row-ind-item show ${winner === 1 ? 'p1w' : 'p2w'}`;
+    if (ind) {
+      ind.textContent = vsAI ? (winner === aiPlayer ? 'AI' : 'YOU') : `P${winner}`;
+      ind.className = `row-ind-item show ${winner === 1 ? 'p1w' : 'p2w'}`;
+    }
   }
 
   showEndgame(p1Wins, p2Wins, rowResults);
 }
 
 function showEndgame(p1Wins, p2Wins, rowResults) {
-  const overallWinner = p1Wins >= 2 ? 1 : 2;
+  const needed = Math.floor(currentVariant.rows / 2) + 1;
+  const overallWinner = p1Wins >= needed ? 1 : 2;
   const winColor = overallWinner === 1 ? 'var(--p1)' : 'var(--p2)';
 
-  // Scoreboard title & score
   const title = document.getElementById('scoreboardTitle');
   const scoreLine = document.getElementById('scoreboardScore');
 
-  if (vsAI) {
-    title.textContent = overallWinner === aiPlayer ? 'AI WINS' : 'YOU WIN!';
-  } else {
-    title.textContent = `PLAYER ${overallWinner} WINS!`;
-  }
+  if (vsAI) title.textContent = overallWinner === aiPlayer ? 'AI WINS' : 'YOU WIN!';
+  else title.textContent = `PLAYER ${overallWinner} WINS!`;
   title.style.color = winColor;
 
   const p1Label = vsAI ? (aiPlayer === 1 ? 'AI' : 'You') : 'P1';
   const p2Label = vsAI ? (aiPlayer === 2 ? 'AI' : 'You') : 'P2';
-  scoreLine.textContent = `${p1Label} ${p1Wins} \u2014 ${p2Label} ${p2Wins}`;
+  scoreLine.textContent = `${p1Label} ${p1Wins} — ${p2Label} ${p2Wins}`;
 
-  // Build row-by-row breakdown
   const breakdown = document.getElementById('endgameBreakdown');
   let html = '';
   for (const rr of rowResults) {
     const keyParity = rr.keyVal % 2 === 0 ? 'even' : 'odd';
     const mkParity = rr.mk % 2 === 0 ? 'even' : 'odd';
-    const symbol = rr.parityMatch ? '=' : '\u2260';
+    const symbol = rr.parityMatch ? '=' : '≠';
     const rwLabel = vsAI ? (rr.winner === aiPlayer ? 'AI' : 'YOU') : `P${rr.winner}`;
 
     html += `<div class="breakdown-row">
       <span class="breakdown-label">Row ${rr.row + 1}</span>
-      <span class="breakdown-rule">Key ${rr.keyVal}(${keyParity}) ${symbol} MK ${rr.mk}(${mkParity}) \u2192 ${rr.rule}</span>
+      <span class="breakdown-rule">Key ${rr.keyVal}(${keyParity}) ${symbol} ${rr.mkLabel} ${rr.mk}(${mkParity}) → ${rr.rule}</span>
       <span class="breakdown-winner ${rr.winner === 1 ? 'bw-p1' : 'bw-p2'}">${rwLabel}</span>
     </div>`;
   }
   breakdown.innerHTML = html;
 
-  // Toggle UI: hide game chrome, show endgame chrome
   document.getElementById('turnBar').style.display = 'none';
   document.getElementById('scoreboard').classList.add('show');
   document.getElementById('boardContainer').classList.add('endgame');
@@ -927,6 +1249,78 @@ function hideEndgame() {
   document.getElementById('endgameActions').classList.remove('show');
 }
 
+function updateTurnBar() {
+  const bar = document.getElementById('turnBar');
+  const text = document.getElementById('turnText');
+  bar.className = `turn-bar p${currentPlayer}-turn`;
+
+  if (aiThinking) {
+    text.textContent = 'AI is thinking...';
+    bar.classList.add('ai-thinking');
+  } else if (vsAI) {
+    text.textContent = currentPlayer === aiPlayer ? "AI's Turn" : 'Your Turn';
+    bar.classList.remove('ai-thinking');
+  } else {
+    text.textContent = `Player ${currentPlayer}'s Turn`;
+    bar.classList.remove('ai-thinking');
+  }
+}
+
+function updateParityHint() {
+  const hint = document.getElementById('parityHint');
+  if (gameOver) {
+    hint.style.display = 'none';
+    return;
+  }
+
+  if (currentVariant.draft) {
+    if (!draftedThisTurn) {
+      hint.textContent = `Draft phase: pick one from market (${marketNumbers.join(', ')}), then place from your hand.`;
+      return;
+    }
+    hint.textContent = `Place phase: choose a cell, then place from hand (${playerHands[currentPlayer].join(', ')}).`;
+    return;
+  }
+
+  if (currentVariant.id === 'dual-master') {
+    const mo = board['mkOdd'];
+    const me = board['mkEven'];
+    if (mo != null || me != null) {
+      hint.textContent = `Odd keys use MASTER ODD (${mo ?? '?'}). Even keys use MASTER EVEN (${me ?? '?'}).`;
+      return;
+    }
+  }
+
+  if (currentVariant.hiddenMaster && board['mk'] != null) {
+    hint.textContent = 'Master Key is hidden until the end. Plan for both parity outcomes.';
+    return;
+  }
+
+  if (board['mk'] !== undefined) {
+    const mkVal = board['mk'];
+    const mkParity = mkVal % 2 === 0 ? 'even' : 'odd';
+    hint.innerHTML = `Master Key is <span class="${mkParity === 'even' ? 'even' : 'odd'}">${mkVal} (${mkParity})</span>. ` +
+      `Key matches → <span class="low">lower wins</span>. Key differs → <span class="high">higher wins</span>.`;
+    return;
+  }
+
+  if (selectedCell) {
+    if (isMasterCell(selectedCell)) hint.textContent = 'Placing in a Master Key cell.';
+    else {
+      const col = parseInt(selectedCell[3], 10);
+      const colName = ['P1', 'P2', 'Key'][col];
+      hint.textContent = `Placing in ${colName} column. Choose a number.`;
+    }
+    return;
+  }
+
+  if (currentVariant.keyLock) {
+    hint.textContent = 'Tap a cell, then choose a number. Key placements lock that row for one opponent turn.';
+  } else {
+    hint.textContent = 'Tap a cell, then choose a number to place.';
+  }
+}
+
 function showHelp() {
   document.getElementById('helpOverlay').classList.add('show');
 }
@@ -934,10 +1328,6 @@ function showHelp() {
 function hideHelp() {
   document.getElementById('helpOverlay').classList.remove('show');
 }
-
-// ── Menu ──
-
-let selectedDiff = 'medium';
 
 function showMenu() {
   hideEndgame();
@@ -959,6 +1349,9 @@ function selectDifficulty(diff) {
 }
 
 function startGame(ai, turnOrder) {
+  const selectedVariantId = document.getElementById('variantSelect').value;
+  currentVariant = VARIANTS[selectedVariantId] || VARIANTS.classic;
+
   vsAI = ai;
   if (vsAI) {
     aiDifficulty = selectedDiff;
@@ -966,11 +1359,24 @@ function startGame(ai, turnOrder) {
     else if (turnOrder === 'random') aiPlayer = Math.random() < 0.5 ? 1 : 2;
     else aiPlayer = 2;
   }
+
   document.getElementById('menuOverlay').classList.remove('show');
+  const aiNote = currentVariant.id === 'classic' ? aiDifficulty.toUpperCase() : 'RANDOM';
   document.getElementById('subtitleText').textContent = vsAI
-    ? `VS AI (${aiDifficulty.toUpperCase()})`
-    : '2-PLAYER';
+    ? `VS AI (${aiNote}) • ${currentVariant.label.toUpperCase()}`
+    : `${currentVariant.label.toUpperCase()} • 2-PLAYER`;
+
   newGame();
+}
+
+function refillMarket() {
+  if (!currentVariant.draft) return;
+  const remaining = getRemainingNumbers().filter(n => !marketNumbers.includes(n) && !playerHands[1].includes(n) && !playerHands[2].includes(n));
+  while (marketNumbers.length < 3 && remaining.length) {
+    const pick = randPick(remaining);
+    marketNumbers.push(pick);
+    remaining.splice(remaining.indexOf(pick), 1);
+  }
 }
 
 function newGame() {
@@ -982,33 +1388,24 @@ function newGame() {
   gameOver = false;
   numberPlacements = {};
   aiThinking = false;
+  rowLocks = Array(currentVariant.rows).fill(0);
+
+  playerHands = { 1: [], 2: [] };
+  marketNumbers = [];
+  draftedThisTurn = false;
 
   hideEndgame();
+  buildGrid();
+  buildMasterKeyArea();
 
-  // Reset grid cells
-  document.querySelectorAll('.cell').forEach(el => {
-    el.textContent = '';
-    el.className = `cell col-${el.dataset.col}`;
-  });
-
-  // Reset master key
-  const mk = document.getElementById('masterKey');
-  mk.textContent = '';
-  mk.className = 'master-key-cell';
-
-  // Reset picker
-  document.querySelectorAll('.num-btn').forEach(btn => {
-    btn.className = 'num-btn';
-  });
-
-  // Reset row indicators
-  for (let i = 0; i < 3; i++) {
-    const ind = document.getElementById(`rowInd${i}`);
-    ind.className = 'row-ind-item';
-    ind.textContent = '';
+  if (currentVariant.draft) {
+    refillMarket();
+    buildPicker();
+  } else {
+    buildPicker();
+    document.getElementById('pickerLabel').textContent = 'AVAILABLE NUMBERS';
   }
 
-  // Update column headers for AI mode
   const headers = document.querySelectorAll('.col-headers span');
   if (vsAI) {
     headers[0].textContent = aiPlayer === 1 ? 'AI' : 'YOU';
@@ -1021,198 +1418,9 @@ function newGame() {
   updateTurnBar();
   updateParityHint();
 
-  // If AI goes first, trigger its move
-  if (vsAI && currentPlayer === aiPlayer) {
-    triggerAIMove();
-  }
+  if (vsAI && currentPlayer === aiPlayer) triggerAIMove();
 }
 
-// ── AI Engine ──
-
-function getAIMove() {
-  if (aiDifficulty === 'easy') return getRandomMove();
-  if (aiDifficulty === 'medium') return getBestMove(2);
-  // Hard: adaptive depth
-  const movesLeft = 10 - turnCount;
-  const depth = movesLeft <= 6 ? movesLeft : 3;
-  return getBestMove(depth);
-}
-
-function getRandomMove() {
-  const emptyCells = ALL_CELLS.filter(c => board[c] === undefined);
-  const availNums = [];
-  for (let i = 1; i <= 10; i++) if (!usedNumbers.has(i)) availNums.push(i);
-  const cell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-  const num = availNums[Math.floor(Math.random() * availNums.length)];
-  return { cell, num };
-}
-
-function getBestMove(maxDepth) {
-  const emptyCells = ALL_CELLS.filter(c => board[c] === undefined);
-  const availNums = [];
-  for (let i = 1; i <= 10; i++) if (!usedNumbers.has(i)) availNums.push(i);
-
-  // Scores are from P2's perspective (positive = P2 winning)
-  // AI as P2 maximizes; AI as P1 minimizes
-  const aiMaximizes = (aiPlayer === 2);
-  let bestScore = aiMaximizes ? -Infinity : Infinity;
-  let bestMove = null;
-
-  for (const cell of emptyCells) {
-    for (const num of availNums) {
-      board[cell] = num;
-      usedNumbers.add(num);
-      // After AI moves, it's the opponent's turn
-      const score = minimax(maxDepth - 1, !aiMaximizes, -Infinity, Infinity);
-      board[cell] = undefined;
-      usedNumbers.delete(num);
-
-      if (aiMaximizes ? (score > bestScore) : (score < bestScore)) {
-        bestScore = score;
-        bestMove = { cell, num };
-      }
-    }
-  }
-
-  return bestMove;
-}
-
-function minimax(depth, isMaximizing, alpha, beta) {
-  // Terminal: all cells filled
-  const movesLeft = ALL_CELLS.filter(c => board[c] === undefined).length;
-  if (movesLeft === 0) return evaluateTerminal();
-  if (depth === 0) return evaluateHeuristic();
-
-  const emptyCells = ALL_CELLS.filter(c => board[c] === undefined);
-  const availNums = [];
-  for (let i = 1; i <= 10; i++) if (!usedNumbers.has(i)) availNums.push(i);
-
-  if (isMaximizing) {
-    let best = -Infinity;
-    for (const cell of emptyCells) {
-      for (const num of availNums) {
-        board[cell] = num;
-        usedNumbers.add(num);
-        const score = minimax(depth - 1, false, alpha, beta);
-        board[cell] = undefined;
-        usedNumbers.delete(num);
-        best = Math.max(best, score);
-        alpha = Math.max(alpha, best);
-        if (beta <= alpha) return best;
-      }
-    }
-    return best;
-  } else {
-    let best = Infinity;
-    for (const cell of emptyCells) {
-      for (const num of availNums) {
-        board[cell] = num;
-        usedNumbers.add(num);
-        const score = minimax(depth - 1, true, alpha, beta);
-        board[cell] = undefined;
-        usedNumbers.delete(num);
-        best = Math.min(best, score);
-        beta = Math.min(beta, best);
-        if (beta <= alpha) return best;
-      }
-    }
-    return best;
-  }
-}
-
-function evaluateTerminal() {
-  // All cells filled — exact scoring
-  const mk = board['mk'];
-  const mkEven = mk % 2 === 0;
-  let p2Rows = 0;
-
-  for (let r = 0; r < 3; r++) {
-    const p1 = board[`r${r}c0`];
-    const p2 = board[`r${r}c1`];
-    const key = board[`r${r}c2`];
-    const match = mkEven === (key % 2 === 0);
-    const winner = match ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
-    p2Rows += winner === 2 ? 1 : -1;
-  }
-
-  return p2Rows;
-}
-
-function evaluateHeuristic() {
-  const mk = board['mk'];
-  let score = 0;
-
-  for (let r = 0; r < 3; r++) {
-    const p1 = board[`r${r}c0`];
-    const p2 = board[`r${r}c1`];
-    const key = board[`r${r}c2`];
-
-    if (p1 != null && p2 != null && key != null && mk != null) {
-      // Fully determined row
-      const match = (mk % 2 === 0) === (key % 2 === 0);
-      const winner = match ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
-      score += winner === 2 ? 1 : -1;
-    } else if (p1 != null && p2 != null) {
-      // Both player values known, rule uncertain
-      if (mk != null) {
-        const mkEven = mk % 2 === 0;
-        let evens = 0, odds = 0;
-        for (let i = 1; i <= 10; i++) {
-          if (!usedNumbers.has(i)) {
-            if (i % 2 === 0) evens++; else odds++;
-          }
-        }
-        const total = evens + odds;
-        if (total === 0) continue;
-        const pMatch = mkEven ? evens / total : odds / total;
-        let s = 0;
-        if (p1 < p2) {
-          s = pMatch * (-1) + (1 - pMatch) * 1;
-        } else {
-          s = pMatch * 1 + (1 - pMatch) * (-1);
-        }
-        score += s * 0.7;
-      } else if (key != null) {
-        const keyEven = key % 2 === 0;
-        let evens = 0, odds = 0;
-        for (let i = 1; i <= 10; i++) {
-          if (!usedNumbers.has(i)) {
-            if (i % 2 === 0) evens++; else odds++;
-          }
-        }
-        const total = evens + odds;
-        if (total === 0) continue;
-        const pMatch = keyEven ? evens / total : odds / total;
-        let s = 0;
-        if (p1 < p2) {
-          s = pMatch * (-1) + (1 - pMatch) * 1;
-        } else {
-          s = pMatch * 1 + (1 - pMatch) * (-1);
-        }
-        score += s * 0.7;
-      } else {
-        score += (p2 > p1 ? 0.1 : -0.1);
-      }
-    } else if (p1 != null || p2 != null) {
-      const val = p1 != null ? p1 : p2;
-      const isP2 = p2 != null;
-      if (isP2) {
-        score += (val >= 7 ? 0.05 : val <= 3 ? 0.05 : 0);
-      } else {
-        score -= (val >= 7 ? 0.05 : val <= 3 ? 0.05 : 0);
-      }
-    }
-  }
-
-  for (let r = 0; r < 3; r++) {
-    if (board[`r${r}c2`] != null) score += 0.03;
-  }
-  if (mk != null) score += 0.03;
-
-  return score;
-}
-
-// Initialize
 init();
 </script>
 </body>
