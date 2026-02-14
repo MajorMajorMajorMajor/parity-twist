@@ -161,8 +161,8 @@ h1 {
   box-shadow: inset 0 0 0 2px rgba(255, 215, 0, 0.35);
 }
 .cell.last-move {
-  outline: 2px solid var(--gold);
-  outline-offset: -2px;
+  outline: 1px solid rgba(255, 215, 0, 0.55);
+  outline-offset: -1px;
 }
 
 .cell.col-0 { color: var(--p1); }
@@ -228,7 +228,7 @@ h1 {
 .master-key-cell.filled { cursor: default; }
 .master-key-cell.filled:active { transform: none; }
 .master-key-cell.last-move {
-  box-shadow: inset 0 0 0 2px var(--gold), 0 0 12px rgba(255, 215, 0, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(255, 215, 0, 0.55), 0 0 6px rgba(255, 215, 0, 0.2);
 }
 
 /* Number picker */
@@ -681,18 +681,18 @@ h1 {
 
 <script>
 const VARIANTS = {
-  'key-sum-9': {
-    id: 'key-sum-9', label: '9-Box Key Sum',
-    desc: 'No master cell: parity uses the sum of the Key column across all 3 rows.',
-    rows: 3, numbers: 9,
-    masters: [],
-    keyLock: false, draft: false, hiddenMaster: false
-  },
   classic: {
     id: 'classic', label: 'Classic',
     desc: 'Original 3-row game with one Master Key affecting every row.',
     rows: 3, numbers: 10,
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false
+  },
+  'key-sum-9': {
+    id: 'key-sum-9', label: 'Delfs Variant',
+    desc: '9-box mode: no master cell; parity uses the sum of the Key column.',
+    rows: 3, numbers: 9,
+    masters: [],
     keyLock: false, draft: false, hiddenMaster: false
   },
   'dual-master': {
