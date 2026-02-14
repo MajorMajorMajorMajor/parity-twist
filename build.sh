@@ -8,6 +8,7 @@ SRC_DIR="$PROJECT_DIR/src"
 RES_DIR="$PROJECT_DIR/res"
 ASSETS_DIR="$PROJECT_DIR/assets"
 ANDROID_JAR="$LIBS_DIR/android.jar"
+R8_JAR="$LIBS_DIR/r8.jar"
 PACKAGE="com.paritytwist"
 MIN_SDK=26
 TARGET_SDK=34
@@ -16,6 +17,29 @@ REV_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 APK_NAME="parity-twist-dev-v0.00-${REV_ID}"
 echo "=== Parity Twist Dev Build ==="
+
+# Auto-setup libs/ if missing
+mkdir -p "$LIBS_DIR"
+
+if [ ! -f "$ANDROID_JAR" ]; then
+    echo "Downloading android.jar (API 34)..."
+    PLATFORM_ZIP="$LIBS_DIR/platform-34.zip"
+    curl -sL "https://dl.google.com/android/repository/platform-34-ext7_r03.zip" -o "$PLATFORM_ZIP"
+    unzip -j "$PLATFORM_ZIP" "android-34/android.jar" -d "$LIBS_DIR/"
+    rm "$PLATFORM_ZIP"
+    echo "  Downloaded android.jar"
+fi
+
+if [ ! -f "$R8_JAR" ]; then
+    TERMUX_D8_JAR="${PREFIX:-/data/data/com.termux/files/usr}/share/java/d8.jar"
+    if [ -f "$TERMUX_D8_JAR" ]; then
+        cp "$TERMUX_D8_JAR" "$R8_JAR"
+        echo "  Copied r8.jar from d8 package"
+    else
+        echo "ERROR: r8.jar not found. Install with: pkg install d8"
+        exit 1
+    fi
+fi
 
 # Clean
 rm -rf "$BUILD_DIR"
@@ -57,7 +81,7 @@ javac \
 # Step 4: Convert to DEX
 echo "[4/6] Converting to DEX..."
 find "$BUILD_DIR/classes" -name "*.class" > "$BUILD_DIR/classfiles.txt"
-java -cp "$LIBS_DIR/r8.jar" com.android.tools.r8.D8 \
+java -cp "$R8_JAR" com.android.tools.r8.D8 \
     --min-api "$MIN_SDK" \
     --lib "$ANDROID_JAR" \
     --output "$BUILD_DIR/dex" \

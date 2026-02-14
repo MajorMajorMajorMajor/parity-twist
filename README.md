@@ -55,14 +55,15 @@ The game is a single self-contained HTML file (`assets/game.html`). The Android 
 
 ## Building
 
-### Prerequisites
+### Prerequisites (Termux)
 
-The build script targets **Termux on Android** but works anywhere with these tools:
+```bash
+pkg install aapt2 d8 openjdk-17 android-tools
+```
 
-- **Java JDK 11+** (for `javac`)
-- **Android SDK** — specifically `aapt2` and `apksigner` on your PATH
-- **android.jar** (API 34) at `libs/android.jar`
-- **r8.jar** (D8 dex compiler) at `libs/r8.jar`
+This provides `aapt2`, `apksigner`, `javac`, and the D8 dex compiler. The build script auto-downloads `android.jar` (API 34, ~26MB) and copies `r8.jar` from the `d8` package on first run — no manual setup needed.
+
+For non-Termux environments, manually place `android.jar` (API 34) and `r8.jar` in `libs/`.
 
 ### Build the APK
 
@@ -70,7 +71,7 @@ The build script targets **Termux on Android** but works anywhere with these too
 bash build.sh
 ```
 
-This compiles resources, Java source, converts to DEX, packages, and signs with a debug keystore (auto-generated on first build). Output: `build/parity-twist.apk`.
+This compiles resources, Java source, converts to DEX, packages, and signs with a debug keystore (auto-generated on first build). Output: `build/parity-twist-dev-v0.00-<rev>.apk`.
 
 ### Regenerate the icon
 
