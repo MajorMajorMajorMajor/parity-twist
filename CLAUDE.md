@@ -27,7 +27,7 @@ On each code/content change (unless the user asks to skip):
 3. Copy newest APK to Android Downloads:
    - `LATEST_APK=$(ls -t build/*.apk | head -n 1); cp "$LATEST_APK" /storage/emulated/0/Download/`
 4. Publish web to Vercel for the current branch:
-   - On `dev`: use `VERCEL_ORG_ID=team_EmWFQ8bH8Vr73Ied2rfX5cHh VERCEL_PROJECT_ID=prj_qRCCwl8MuFf2vjXIKAhIbZMbFwx5 vercel --yes --prod` from `web/`
-   - On `main`: deploy to production project (`parity-twist`) from `web/`
+   - Run: `bash deploy-web.sh`
+   - The script auto-copies `assets/game.html` to `web/index.html` and deploys to the correct Vercel project based on branch (`dev` or `main`).
 
 Do not push commits to GitHub unless the user explicitly requests it.
