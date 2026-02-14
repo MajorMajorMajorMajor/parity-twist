@@ -632,27 +632,8 @@ h1 {
 <!-- Help overlay -->
 <div class="help-overlay" id="helpOverlay">
   <div class="help-content">
-    <h2>How to Play</h2>
-    <p><strong>Parity Twist</strong> is a 2-player strategy game. Compete to win 2 out of 3 rows!</p>
-
-    <h3>Setup</h3>
-    <p>The board has 3 columns: <span class="hl-p1">P1</span>, <span class="hl-p2">P2</span>, and <span class="hl-key">Key</span>, each with 3 rows. Below the Key column is the <span class="hl-mk">Master Key</span> cell.</p>
-
-    <h3>Gameplay</h3>
-    <p>Players take turns placing numbers <strong>1 to 10</strong> in any empty cell (in any column, or the Master Key). Each number can only be used once.</p>
-
-    <h3>Winning a Row</h3>
-    <p>After all 10 cells are filled, each row is scored:</p>
-    <p>Compare the <span class="hl-key">Key</span> number's parity (odd/even) with the <span class="hl-mk">Master Key</span>'s parity:</p>
-    <ul style="margin: 6px 0 6px 16px;">
-      <li><strong>Same parity</strong> (both odd or both even) &rarr; the <em>lower</em> number between P1 and P2 wins the row</li>
-      <li><strong>Different parity</strong> &rarr; the <em>higher</em> number wins the row</li>
-    </ul>
-    <p>Win <strong>2 out of 3</strong> rows to win the game!</p>
-
-    <h3>Strategy</h3>
-    <p>The Master Key affects ALL rows at once, making it a powerful move. Key column numbers determine the scoring rule per row. Plan ahead!</p>
-
+    <h2 id="helpTitle">How to Play</h2>
+    <div id="helpBody"></div>
     <button class="btn btn-primary help-close" onclick="hideHelp()">GOT IT</button>
   </div>
 </div>
@@ -739,6 +720,7 @@ function init() {
   buildGrid();
   buildMasterKeyArea();
   buildPicker();
+  renderHelpContent();
   updateTurnBar();
   updateParityHint();
 }
@@ -1011,12 +993,16 @@ function getLegalEmptyCells() {
 }
 
 function getAIMove() {
-  if (currentVariant.id !== 'classic') return getRandomMove();
+  const searchVariants = new Set(['classic', 'dual-master', 'key-lock']);
+  if (!searchVariants.has(currentVariant.id)) return getRandomMove();
 
   if (aiDifficulty === 'easy') return getRandomMove();
   if (aiDifficulty === 'medium') return getBestMove(2);
+
   const movesLeft = getAllCells().filter(c => board[c] === undefined).length;
-  const depth = movesLeft <= 6 ? movesLeft : 3;
+  const depth = currentVariant.id === 'classic'
+    ? (movesLeft <= 6 ? movesLeft : 3)
+    : (movesLeft <= 5 ? movesLeft : 3);
   return getBestMove(depth);
 }
 
@@ -1035,11 +1021,11 @@ function getBestMove(maxDepth) {
 
   for (const cell of emptyCells) {
     for (const num of availNums) {
-      board[cell] = num;
-      usedNumbers.add(num);
-      const score = minimax(maxDepth - 1, !aiMaximizes, -Infinity, Infinity);
-      board[cell] = undefined;
-      usedNumbers.delete(num);
+      const nextBoard = { ...board, [cell]: num };
+      const nextUsed = new Set(usedNumbers);
+      nextUsed.add(num);
+      const nextLocks = applyLocksAfterMove(rowLocks, cell);
+      const score = minimaxVariant(maxDepth - 1, !aiMaximizes, -Infinity, Infinity, nextBoard, nextUsed, nextLocks);
 
       if (aiMaximizes ? score > bestScore : score < bestScore) {
         bestScore = score;
@@ -1051,23 +1037,114 @@ function getBestMove(maxDepth) {
   return bestMove || getRandomMove();
 }
 
-function minimax(depth, isMaximizing, alpha, beta) {
-  const movesLeft = getAllCells().filter(c => board[c] === undefined).length;
-  if (movesLeft === 0) return evaluateTerminalClassic();
-  if (depth === 0) return evaluateHeuristicClassic();
+function applyLocksAfterMove(locks, placedCell) {
+  let nextLocks = [...locks];
+  if (currentVariant.keyLock && placedCell.startsWith('r') && parseInt(placedCell[3], 10) === 2) {
+    const row = parseInt(placedCell[1], 10);
+    nextLocks[row] = 2;
+  }
+  if (currentVariant.keyLock) {
+    nextLocks = nextLocks.map(v => Math.max(0, v - 1));
+  }
+  return nextLocks;
+}
 
-  const emptyCells = getLegalEmptyCells();
-  const availNums = getRemainingNumbers();
+function getLegalCellsForState(simBoard, simLocks) {
+  return getAllCells().filter(c => {
+    if (simBoard[c] !== undefined) return false;
+    if (!currentVariant.keyLock || !c.startsWith('r')) return true;
+    const row = parseInt(c[1], 10);
+    const col = parseInt(c[3], 10);
+    if (col === 2) return true;
+    return (simLocks[row] || 0) === 0;
+  });
+}
+
+function getRowRuleForBoard(simBoard, r) {
+  const keyVal = simBoard[`r${r}c2`];
+  if (currentVariant.id === 'dual-master') {
+    const mkId = keyVal % 2 === 1 ? 'mkOdd' : 'mkEven';
+    const mkVal = simBoard[mkId];
+    const parityMatch = (keyVal % 2) === (mkVal % 2);
+    return { mkVal, mkLabel: mkId === 'mkOdd' ? 'MO' : 'ME', parityMatch };
+  }
+
+  const mkVal = simBoard['mk'];
+  const parityMatch = (keyVal % 2) === (mkVal % 2);
+  return { mkVal, mkLabel: 'MK', parityMatch };
+}
+
+function evaluateTerminalForBoard(simBoard) {
+  let p2Rows = 0;
+  for (let r = 0; r < currentVariant.rows; r++) {
+    const p1 = simBoard[`r${r}c0`];
+    const p2 = simBoard[`r${r}c1`];
+    const rr = getRowRuleForBoard(simBoard, r);
+    const winner = rr.parityMatch ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
+    p2Rows += winner === 2 ? 1 : -1;
+  }
+  return p2Rows;
+}
+
+function evaluateHeuristicForBoard(simBoard) {
+  let score = 0;
+
+  for (let r = 0; r < currentVariant.rows; r++) {
+    const p1 = simBoard[`r${r}c0`];
+    const p2 = simBoard[`r${r}c1`];
+    const key = simBoard[`r${r}c2`];
+
+    if (p1 != null && p2 != null && key != null) {
+      const mastersReady = currentVariant.id === 'dual-master'
+        ? (simBoard['mkOdd'] != null && simBoard['mkEven'] != null)
+        : (simBoard['mk'] != null);
+      if (mastersReady) {
+        const rr = getRowRuleForBoard(simBoard, r);
+        const winner = rr.parityMatch ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
+        score += winner === 2 ? 1 : -1;
+      } else {
+        score += (p2 > p1 ? 0.1 : -0.1);
+      }
+    } else if (p1 != null && p2 != null) {
+      score += (p2 > p1 ? 0.12 : -0.12);
+    } else if (p1 != null || p2 != null) {
+      const val = p1 != null ? p1 : p2;
+      const isP2 = p2 != null;
+      const edge = (val >= Math.ceil(currentVariant.numbers * 0.7) || val <= Math.floor(currentVariant.numbers * 0.3)) ? 0.06 : 0;
+      score += isP2 ? edge : -edge;
+    }
+
+    if (key != null) score += 0.02;
+  }
+
+  if (currentVariant.id === 'dual-master') {
+    if (simBoard['mkOdd'] != null) score += 0.02;
+    if (simBoard['mkEven'] != null) score += 0.02;
+  } else {
+    if (simBoard['mk'] != null) score += 0.03;
+  }
+
+  return score;
+}
+
+function minimaxVariant(depth, isMaximizing, alpha, beta, simBoard, simUsed, simLocks) {
+  const movesLeft = getAllCells().filter(c => simBoard[c] === undefined).length;
+  if (movesLeft === 0) return evaluateTerminalForBoard(simBoard);
+  if (depth === 0) return evaluateHeuristicForBoard(simBoard);
+
+  const emptyCells = getLegalCellsForState(simBoard, simLocks);
+  const availNums = [];
+  for (let i = 1; i <= currentVariant.numbers; i++) if (!simUsed.has(i)) availNums.push(i);
 
   if (isMaximizing) {
     let best = -Infinity;
     for (const cell of emptyCells) {
       for (const num of availNums) {
-        board[cell] = num;
-        usedNumbers.add(num);
-        const score = minimax(depth - 1, false, alpha, beta);
-        board[cell] = undefined;
-        usedNumbers.delete(num);
+        const nextBoard = { ...simBoard, [cell]: num };
+        const nextUsed = new Set(simUsed);
+        nextUsed.add(num);
+        const nextLocks = applyLocksAfterMove(simLocks, cell);
+        const score = minimaxVariant(depth - 1, false, alpha, beta, nextBoard, nextUsed, nextLocks);
         best = Math.max(best, score);
         alpha = Math.max(alpha, best);
         if (beta <= alpha) return best;
@@ -1079,11 +1156,11 @@ function minimax(depth, isMaximizing, alpha, beta) {
   let best = Infinity;
   for (const cell of emptyCells) {
     for (const num of availNums) {
-      board[cell] = num;
-      usedNumbers.add(num);
-      const score = minimax(depth - 1, true, alpha, beta);
-      board[cell] = undefined;
-      usedNumbers.delete(num);
+      const nextBoard = { ...simBoard, [cell]: num };
+      const nextUsed = new Set(simUsed);
+      nextUsed.add(num);
+      const nextLocks = applyLocksAfterMove(simLocks, cell);
+      const score = minimaxVariant(depth - 1, true, alpha, beta, nextBoard, nextUsed, nextLocks);
       best = Math.min(best, score);
       beta = Math.min(beta, best);
       if (beta <= alpha) return best;
@@ -1092,60 +1169,8 @@ function minimax(depth, isMaximizing, alpha, beta) {
   return best;
 }
 
-function evaluateTerminalClassic() {
-  const mk = board['mk'];
-  const mkEven = mk % 2 === 0;
-  let p2Rows = 0;
-  for (let r = 0; r < 3; r++) {
-    const p1 = board[`r${r}c0`];
-    const p2 = board[`r${r}c1`];
-    const key = board[`r${r}c2`];
-    const match = mkEven === (key % 2 === 0);
-    const winner = match ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
-    p2Rows += winner === 2 ? 1 : -1;
-  }
-  return p2Rows;
-}
-
-function evaluateHeuristicClassic() {
-  const mk = board['mk'];
-  let score = 0;
-
-  for (let r = 0; r < 3; r++) {
-    const p1 = board[`r${r}c0`];
-    const p2 = board[`r${r}c1`];
-    const key = board[`r${r}c2`];
-
-    if (p1 != null && p2 != null && key != null && mk != null) {
-      const match = (mk % 2 === 0) === (key % 2 === 0);
-      const winner = match ? (p1 < p2 ? 1 : 2) : (p1 > p2 ? 1 : 2);
-      score += winner === 2 ? 1 : -1;
-    } else if (p1 != null && p2 != null) {
-      score += (p2 > p1 ? 0.12 : -0.12);
-    } else if (p1 != null || p2 != null) {
-      const val = p1 != null ? p1 : p2;
-      const isP2 = p2 != null;
-      const edge = (val >= 7 || val <= 3) ? 0.06 : 0;
-      score += isP2 ? edge : -edge;
-    }
-  }
-
-  if (mk != null) score += 0.03;
-  return score;
-}
-
 function getRowRule(r) {
-  const keyVal = board[`r${r}c2`];
-  if (currentVariant.id === 'dual-master') {
-    const mkId = keyVal % 2 === 1 ? 'mkOdd' : 'mkEven';
-    const mkVal = board[mkId];
-    const parityMatch = (keyVal % 2) === (mkVal % 2);
-    return { mkVal, mkLabel: mkId === 'mkOdd' ? 'MO' : 'ME', parityMatch };
-  }
-
-  const mkVal = board['mk'];
-  const parityMatch = (keyVal % 2) === (mkVal % 2);
-  return { mkVal, mkLabel: 'MK', parityMatch };
+  return getRowRuleForBoard(board, r);
 }
 
 function resolveGame() {
@@ -1321,7 +1346,57 @@ function updateParityHint() {
   }
 }
 
+function renderHelpContent() {
+  const title = document.getElementById('helpTitle');
+  const body = document.getElementById('helpBody');
+  const rows = currentVariant.rows;
+  const needed = Math.floor(rows / 2) + 1;
+
+  title.textContent = `How to Play — ${currentVariant.label}`;
+
+  let variantBits = '';
+  if (currentVariant.id === 'dual-master') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>There are two global master keys:</p>
+      <ul style="margin: 6px 0 6px 16px;">
+        <li><strong>MASTER ODD</strong> applies to rows with odd Key values</li>
+        <li><strong>MASTER EVEN</strong> applies to rows with even Key values</li>
+      </ul>`;
+  } else if (currentVariant.id === 'key-lock') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>When a Key cell is filled, that row's P1/P2 cells are locked for exactly one opponent turn.</p>`;
+  } else if (currentVariant.id === 'draft-place') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>Each turn has two phases: <strong>Draft</strong> one number from the market, then <strong>Place</strong> one number from your hand.</p>`;
+  } else if (currentVariant.id === 'best-of-5') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>The board has 5 rows. Win <strong>${needed} of ${rows}</strong> rows to win the game.</p>`;
+  } else if (currentVariant.id === 'hidden-master') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>The Master Key value stays hidden after placement and is revealed only at scoring time.</p>`;
+  }
+
+  const masterText = currentVariant.id === 'dual-master'
+    ? 'Master Odd / Master Even'
+    : 'Master Key';
+
+  body.innerHTML = `
+    <p><strong>Parity Twist</strong> is a 2-player strategy game. Win <strong>${needed} out of ${rows}</strong> rows.</p>
+    <h3>Setup</h3>
+    <p>The board has 3 columns: <span class="hl-p1">P1</span>, <span class="hl-p2">P2</span>, and <span class="hl-key">Key</span>, with ${rows} rows.
+    ${currentVariant.draft ? 'Numbers are drafted and then placed.' : `The ${masterText} cell${currentVariant.id === 'dual-master' ? 's' : ''} control row scoring rules.`}</p>
+
+    <h3>Core Scoring Rule</h3>
+    <ul style="margin: 6px 0 6px 16px;">
+      <li><strong>Same parity</strong> between Key and active master rule &rarr; <em>lower</em> of P1/P2 wins the row</li>
+      <li><strong>Different parity</strong> &rarr; <em>higher</em> of P1/P2 wins the row</li>
+    </ul>
+    ${variantBits}
+  `;
+}
+
 function showHelp() {
+  renderHelpContent();
   document.getElementById('helpOverlay').classList.add('show');
 }
 
@@ -1361,11 +1436,13 @@ function startGame(ai, turnOrder) {
   }
 
   document.getElementById('menuOverlay').classList.remove('show');
-  const aiNote = currentVariant.id === 'classic' ? aiDifficulty.toUpperCase() : 'RANDOM';
+  const searchVariants = new Set(['classic', 'dual-master', 'key-lock']);
+  const aiNote = searchVariants.has(currentVariant.id) ? aiDifficulty.toUpperCase() : 'RANDOM';
   document.getElementById('subtitleText').textContent = vsAI
     ? `VS AI (${aiNote}) • ${currentVariant.label.toUpperCase()}`
     : `${currentVariant.label.toUpperCase()} • 2-PLAYER`;
 
+  renderHelpContent();
   newGame();
 }
 
