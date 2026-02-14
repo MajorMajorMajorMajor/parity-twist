@@ -688,6 +688,13 @@ const VARIANTS = {
     masters: [{ id: 'mk', label: 'MASTER KEY' }],
     keyLock: false, draft: false, hiddenMaster: false
   },
+  'total-score': {
+    id: 'total-score', label: 'Total Score',
+    desc: 'Row winners score by value: add the winning number from each row; highest total wins.',
+    rows: 3, numbers: 10,
+    masters: [{ id: 'mk', label: 'MASTER KEY' }],
+    keyLock: false, draft: false, hiddenMaster: false
+  },
   'key-sum-9': {
     id: 'key-sum-9', label: 'Delfs',
     desc: '9-box mode: no master cell; parity uses the sum of the Key column.',
@@ -1355,7 +1362,12 @@ function resolveGame() {
     const rr = getRowRule(r);
 
     const parityWinner = rr.parityMatch ? (p1Val < p2Val ? 1 : 2) : (p1Val > p2Val ? 1 : 2);
-    const parityPoints = currentVariant.id === 'hodgkins' ? 2 : 1;
+    const rowWinValue = parityWinner === 1 ? p1Val : p2Val;
+    const parityPoints = currentVariant.id === 'hodgkins'
+      ? 2
+      : currentVariant.id === 'total-score'
+        ? rowWinValue
+        : 1;
     if (parityWinner === 1) p1Score += parityPoints; else p2Score += parityPoints;
 
     let closestWinner = null;
@@ -1580,6 +1592,10 @@ function renderHelpContent() {
   if (currentVariant.id === 'key-sum-9') {
     variantBits = `<h3>Variant Rule</h3>
       <p>There is no separate Master Key cell. Add all Key-column values; that sum parity is the master rule for every row.</p>`;
+  } else if (currentVariant.id === 'total-score') {
+    variantBits = `<h3>Variant Rule</h3>
+      <p>Use normal row-winning rules, but scoring is by value: each won row contributes its winning P1/P2 number to your total.</p>
+      <p>Highest total score wins (not most rows).</p>`;
   } else if (currentVariant.id === 'whiteacre') {
     variantBits = `<h3>Variant Rule</h3>
       <p>Uses normal Master Key scoring, but with numbers <strong>1-12</strong>. You fill 10 cells and <strong>2 numbers remain unplayed</strong>.</p>`;
@@ -1622,7 +1638,9 @@ function renderHelpContent() {
 
   const objectiveText = currentVariant.id === 'hodgkins'
     ? 'Score the most points (typically 5+ out of 9).'
-    : `Win <strong>${needed} out of ${rows}</strong> rows.`;
+    : currentVariant.id === 'total-score'
+      ? 'Score the highest total of winning row values.'
+      : `Win <strong>${needed} out of ${rows}</strong> rows.`;
 
   body.innerHTML = `
     <p><strong>Parity Twist</strong> is a 2-player strategy game. ${objectiveText}</p>
